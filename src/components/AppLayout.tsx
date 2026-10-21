@@ -5,38 +5,62 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/lib/types'
 import { ROLE_LABELS } from '@/lib/constants'
+import { useLanguage } from '@/context/LanguageContext'
 
 const NAV_ITEMS = [
-  { section: 'Overview', items: [
-    { href: '/dashboard', icon: '▦', label: 'Dashboard', labelAr: 'لوحة التحكم' },
-    { href: '/projects', icon: '🗂', label: 'Panel Projects', labelAr: 'مشاريع اللوحات' },
-  ]},
-  { section: 'Sales & CRM', items: [
-    { href: '/crm', icon: '💼', label: 'Sales / CRM', labelAr: 'المبيعات / CRM' },
-  ]},
-  { section: 'Engineering & Production', items: [
-    { href: '/engineering', icon: '📐', label: 'Engineering', labelAr: 'الهندسة' },
-    { href: '/tasks', icon: '✅', label: 'Tasks & Production', labelAr: 'المهام والإنتاج' },
-    { href: '/procurement', icon: '🛒', label: 'Procurement', labelAr: 'المشتريات' },
-    { href: '/warehouse', icon: '🏭', label: 'Warehouse', labelAr: 'المستودع' },
-    { href: '/production', icon: '⚙️', label: 'Production (MRP)', labelAr: 'الإنتاج (MRP)' },
-    { href: '/qc', icon: '🔍', label: 'Quality Control', labelAr: 'ضبط الجودة' },
-    { href: '/logistics', icon: '🚚', label: 'Logistics', labelAr: 'اللوجستيات' },
-  ]},
-  { section: 'Finance & HR', items: [
-    { href: '/accounting', icon: '💳', label: 'Invoicing & Accounting', labelAr: 'الفواتير والمحاسبة' },
-    { href: '/hr', icon: '👥', label: 'HR & Payroll', labelAr: 'الموارد البشرية والرواتب' },
-  ]},
-  { section: 'Documents & Support', items: [
-    { href: '/dms', icon: '📁', label: 'DMS Documents', labelAr: 'إدارة الوثائق والمخططات' },
-    { href: '/helpdesk', icon: '🎧', label: 'Helpdesk & Warranty', labelAr: 'الدعم الفني والضمان' },
-    { href: '/reports', icon: '📊', label: 'Reporting Engine', labelAr: 'محرك التقارير' },
-  ]},
-  { section: 'Settings', items: [
-    { href: '/config', icon: '⚙', label: 'Configuration', labelAr: 'الإعدادات' },
-  ]},
+  {
+    section: 'Overview',
+    sectionAr: 'نظرة عامة',
+    items: [
+      { href: '/dashboard', icon: '▦', label: 'Dashboard', labelAr: 'لوحة التحكم' },
+      { href: '/projects', icon: '🗂', label: 'Panel Projects', labelAr: 'مشاريع اللوحات' },
+    ],
+  },
+  {
+    section: 'Sales & CRM',
+    sectionAr: 'المبيعات والعملاء',
+    items: [
+      { href: '/crm', icon: '💼', label: 'Sales / CRM', labelAr: 'المبيعات / CRM' },
+    ],
+  },
+  {
+    section: 'Engineering & Production',
+    sectionAr: 'الهندسة والتصنيع',
+    items: [
+      { href: '/engineering', icon: '📐', label: 'Engineering', labelAr: 'الهندسة' },
+      { href: '/tasks', icon: '✅', label: 'Tasks & Production', labelAr: 'المهام والإنتاج' },
+      { href: '/procurement', icon: '🛒', label: 'Procurement', labelAr: 'المشتريات' },
+      { href: '/warehouse', icon: '🏭', label: 'Warehouse', labelAr: 'المستودع' },
+      { href: '/production', icon: '⚙️', label: 'Production (MRP)', labelAr: 'الإنتاج (MRP)' },
+      { href: '/qc', icon: '🔍', label: 'Quality Control', labelAr: 'ضبط الجودة' },
+      { href: '/logistics', icon: '🚚', label: 'Logistics', labelAr: 'اللوجستيات' },
+    ],
+  },
+  {
+    section: 'Finance & HR',
+    sectionAr: 'المالية والموارد البشرية',
+    items: [
+      { href: '/accounting', icon: '💳', label: 'Invoicing & Accounting', labelAr: 'الفواتير والمحاسبة' },
+      { href: '/hr', icon: '👥', label: 'HR & Payroll', labelAr: 'الموارد البشرية والرواتب' },
+    ],
+  },
+  {
+    section: 'Documents & Support',
+    sectionAr: 'الوثائق والدعم الفني',
+    items: [
+      { href: '/dms', icon: '📁', label: 'DMS Documents', labelAr: 'إدارة الوثائق والمخططات' },
+      { href: '/helpdesk', icon: '🎧', label: 'Helpdesk & Warranty', labelAr: 'الدعم الفني والضمان' },
+      { href: '/reports', icon: '📊', label: 'Reporting Engine', labelAr: 'محرك التقارير' },
+    ],
+  },
+  {
+    section: 'Settings',
+    sectionAr: 'الإعدادات',
+    items: [
+      { href: '/config', icon: '⚙', label: 'Configuration', labelAr: 'الإعدادات' },
+    ],
+  },
 ]
-
 
 interface Props {
   children: React.ReactNode
@@ -62,8 +86,8 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const { lang, toggleLang, isRtl } = useLanguage()
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE)
-  const [lang, setLang] = useState<'en' | 'ar'>('en')
 
   useEffect(() => {
     supabase.auth.getUser()
@@ -85,18 +109,13 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
       })
   }, [])
 
-  useEffect(() => {
-    document.documentElement.setAttribute('lang', lang)
-    document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr')
-  }, [lang])
-
   async function handleLogout() {
     try { await supabase.auth.signOut() } catch {}
     if (typeof window !== 'undefined') localStorage.removeItem('almasar_user')
     router.push('/login')
   }
 
-  const displayTitle = lang === 'ar' && titleAr ? titleAr : title
+  const displayTitle = isRtl && titleAr ? titleAr : title
 
   return (
     <div className="app-shell">
@@ -105,15 +124,17 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">⚡</div>
           <div className="sidebar-logo-text">
-            <span className="brand-name">Al-Masar</span>
-            <span className="brand-sub">Switchgear ERP</span>
+            <span className="brand-name">{isRtl ? 'المسار' : 'Al-Masar'}</span>
+            <span className="brand-sub">{isRtl ? 'نظام إدارة المصنع' : 'Switchgear ERP'}</span>
           </div>
         </div>
 
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(section => (
             <div key={section.section} className="sidebar-section">
-              <div className="sidebar-section-label">{section.section}</div>
+              <div className="sidebar-section-label">
+                {isRtl ? section.sectionAr : section.section}
+              </div>
               {section.items.map(item => (
                 <Link
                   key={item.href}
@@ -121,7 +142,7 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                   className={`sidebar-item ${pathname.startsWith(item.href) ? 'active' : ''}`}
                 >
                   <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  <span>{lang === 'ar' ? item.labelAr : item.label}</span>
+                  <span>{isRtl ? item.labelAr : item.label}</span>
                 </Link>
               ))}
             </div>
@@ -132,13 +153,15 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
           {profile && (
             <div className="user-card">
               <div className="user-avatar">
-                {profile.full_name.charAt(0).toUpperCase()}
+                {(isRtl && profile.full_name_ar ? profile.full_name_ar : profile.full_name).charAt(0).toUpperCase()}
               </div>
               <div className="user-info">
-                <div className="user-name">{profile.full_name}</div>
-                <div className="user-role">{ROLE_LABELS[profile.role]?.en}</div>
+                <div className="user-name">
+                  {isRtl && profile.full_name_ar ? profile.full_name_ar : profile.full_name}
+                </div>
+                <div className="user-role">{ROLE_LABELS[profile.role]?.[lang] || profile.role}</div>
               </div>
-              <button onClick={handleLogout} title="Logout" style={{ background: 'none', padding: 4, color: 'var(--text-muted)', fontSize: 16 }}>⎋</button>
+              <button onClick={handleLogout} title={isRtl ? 'تسجيل الخروج' : 'Logout'} style={{ background: 'none', padding: 4, color: 'var(--text-muted)', fontSize: 16 }}>⎋</button>
             </div>
           )}
         </div>
@@ -150,13 +173,15 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
           <h1 className="topbar-title">{displayTitle}</h1>
           <div className="topbar-actions">
             {/* Lang Switcher */}
-            <button className="lang-btn" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')}>
+            <button className="lang-btn" onClick={toggleLang}>
               {lang === 'en' ? '🇸🇦 عربي' : '🇬🇧 English'}
             </button>
 
             {/* Points badge */}
             {profile && profile.reward_points > 0 && (
-              <span className="points-badge">⭐ {profile.reward_points} pts</span>
+              <span className="points-badge">
+                ⭐ {profile.reward_points} {isRtl ? 'نقطة' : 'pts'}
+              </span>
             )}
 
             {actions}
