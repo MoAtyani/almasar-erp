@@ -147,6 +147,17 @@ export default function HRPage() {
 
   async function loadHRData() {
     try {
+      const res = await fetch('/api/hr')
+      const json = await res.json()
+      if (json.success && json.data && json.data.length > 0) {
+        setEmployees(json.data.map((e: any) => ({
+          ...e,
+          reward_points: e.reward_points || 0,
+          role: e.system_role || e.role || 'technician',
+          status: e.employment_status || 'active'
+        })))
+        return
+      }
       const { data: emps } = await supabase.from('employees').select('*').order('employee_id')
       if (emps && emps.length > 0) setEmployees(emps as Employee[])
     } catch {

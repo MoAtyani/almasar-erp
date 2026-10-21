@@ -94,8 +94,8 @@ export interface PanelTask {
   sequence: number
   created_at: string
   updated_at: string
-  project?: PanelProject
-  technician?: Profile
+  project?: Partial<PanelProject> | any
+  technician?: Partial<Profile> | any
   template?: ActivityTemplate
   checklist?: ActivityLine[]
 }
@@ -148,7 +148,7 @@ export interface PurchaseOrder {
   created_at: string
   updated_at: string
   lines?: PurchaseOrderLine[]
-  project?: PanelProject
+  project?: Partial<PanelProject> & { reference?: string }
 }
 
 export interface PurchaseOrderLine {
@@ -176,7 +176,7 @@ export interface StockTransfer {
   created_at: string
   updated_at: string
   lines?: StockTransferLine[]
-  project?: PanelProject
+  project?: Partial<PanelProject> & { reference?: string }
 }
 
 export interface StockTransferLine {
@@ -204,7 +204,7 @@ export interface MrpOrder {
   created_at: string
   updated_at: string
   bom_lines?: BomLine[]
-  project?: PanelProject
+  project?: Partial<PanelProject> & { reference?: string }
   responsible?: Profile
 }
 
@@ -230,7 +230,7 @@ export interface QcCheck {
   rejection_reason?: string
   created_at: string
   updated_at: string
-  project?: PanelProject
+  project?: Partial<PanelProject> & { reference?: string }
   inspector?: Profile
 }
 
@@ -253,7 +253,7 @@ export interface Invoice {
   invoice_type: InvoiceType
   partner_name: string
   project_id?: string
-  project?: PanelProject
+  project?: Partial<PanelProject> & { reference?: string }
   invoice_date: string
   due_date: string
   state: InvoiceState

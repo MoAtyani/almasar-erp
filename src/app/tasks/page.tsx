@@ -1,334 +1,426 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
-import { createClient } from '@/lib/supabase/client'
-import { PanelTask, TaskState } from '@/lib/types'
-import { TASK_STATE_LABELS, STAGE_TYPE_LABELS } from '@/lib/constants'
 import { useLanguage } from '@/context/LanguageContext'
-import { MOCK_TASKS } from '@/lib/mockData'
-
-interface TaskWithProject extends Omit<PanelTask, 'project' | 'technician'> {
-  project?: { reference: string; customer_name: string }
-  technician?: { full_name: string }
-}
+import { formatDate } from '@/lib/constants'
 
 export default function TasksPage() {
-  const supabase = createClient()
   const { lang, isRtl } = useLanguage()
-  const [tasks, setTasks] = useState<TaskWithProject[]>(MOCK_TASKS)
-  const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all' | 'my'>('all')
-  const [selectedTask, setSelectedTask] = useState<TaskWithProject | null>(null)
-  const [search, setSearch] = useState('')
-  const [showModal, setShowModal] = useState(false)
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeTimer, setActiveTimer] = useState<any | null>(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [projects, setProjects] = useState<any[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
+
   const [form, setForm] = useState({
-    name: '',
-    stage_type: 'power_busbar' as const,
-    points_awarded: 40,
-    project_id: 'proj-1',
+    project_id: '',
+    department: 'electrical',
+    title: '',
+    description: '',
+    required_deliverables: '',
+    estimated_hours: 4,
+    priority: 'medium',
+    assigned_employee_id: ''
   })
 
-  useEffect(() => { loadAll() }, [])
+  // Current logged in user (mocked fallback or stored profile)
+  const currentUser = typeof window !== 'undefined' ? 
+    JSON.parse(localStorage.getItem('almasar_user') || '{"id":"usr-admin","role":"company_owner"}') : 
+    { id: 'usr-admin', role: 'company_owner' }
 
-  async function loadAll() {
+  useEffect(() => {
+    loadTasks()
+    loadAuxData()
+  }, [])
+
+  // Timer ticker
+  useEffect(() => {
+    let interval: any = null
+    if (activeTimer) {
+      interval = setInterval(() => {
+        const start = new Date(activeTimer.start_time).getTime()
+        const diff = Math.floor((Date.now() - start) / 1000)
+        setElapsedSeconds(diff)
+      }, 1000)
+    } else {
+      setElapsedSeconds(0)
+    }
+    return () => clearInterval(interval)
+  }, [activeTimer])
+
+  async function loadAuxData() {
     try {
-      const { data } = await supabase
-        .from('panel_tasks')
-        .select('*, project:panel_projects(reference, customer_name), technician:profiles(full_name), checklist:activity_lines(*)')
-        .order('sequence', { ascending: true })
-
-      if (data && data.length > 0) {
-        setTasks(data as TaskWithProject[])
+      const [pRes, eRes] = await Promise.all([
+        fetch('/api/projects').then(r => r.json()),
+        fetch('/api/hr?view=employees').then(r => r.json())
+      ])
+      if (pRes.success && pRes.data?.length > 0) {
+        setProjects(pRes.data)
+        setForm(f => ({ ...f, project_id: f.project_id || pRes.data[0].id }))
       }
-    } catch {
-      // Keep mock tasks
+      if (eRes.success && eRes.data?.length > 0) {
+        setEmployees(eRes.data)
+        setForm(f => ({ ...f, assigned_employee_id: f.assigned_employee_id || eRes.data[0].profile_id || eRes.data[0].id }))
+      }
+    } catch (err) {
+      console.error('Error loading aux data:', err)
     }
   }
 
-  function handleStateChange(taskId: string, newState: TaskState) {
-    setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          state: newState,
-          all_activities_done: newState === 'done',
-          checklist: t.checklist ? t.checklist.map(c => ({ ...c, is_done: newState === 'done' ? true : c.is_done })) : []
+  async function loadTasks() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/tasks')
+      const data = await res.json()
+      if (data.success) {
+        setTasks(data.data)
+      }
+
+      // Also check active timer for first employee or user
+      const empId = employees[0]?.id || currentUser?.id
+      if (empId) {
+        const timeRes = await fetch(`/api/time-tracking?employee_id=${empId}`).then(r => r.json())
+        if (timeRes.success && timeRes.activeTimer) {
+          setActiveTimer(timeRes.activeTimer)
         }
       }
-      return t
-    }))
+    } catch (err) {
+      console.error('Failed to load tasks:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function toggleChecklist(taskId: string, lineId: string) {
-    setTasks(prev => prev.map(t => {
-      if (t.id === taskId && t.checklist) {
-        return {
-          ...t,
-          checklist: t.checklist.map(c => c.id === lineId ? { ...c, is_done: !c.is_done } : c)
+  async function handleTimerAction(action: 'start' | 'pause' | 'stop', taskId?: string) {
+    const empId = employees[0]?.id || currentUser?.id
+    try {
+      const res = await fetch('/api/time-tracking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          task_id: taskId,
+          employee_id: empId
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        if (action === 'start') {
+          setActiveTimer(data.timer)
+        } else {
+          setActiveTimer(null)
+          setElapsedSeconds(0)
         }
+        loadTasks()
+      } else {
+        alert(data.error || 'Timer operation failed')
       }
-      return t
-    }))
+    } catch (err) {
+      console.error('Timer action error:', err)
+    }
   }
 
-  function handleCreateTask(e: React.FormEvent) {
+  async function handleTaskAction(id: string, action: string, extra: any = {}) {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action, ...extra })
+      })
+      const data = await res.json()
+      if (data.success) {
+        loadTasks()
+      } else {
+        alert(data.error || 'Action failed')
+      }
+    } catch (err) {
+      console.error('Task action error:', err)
+    }
+  }
+
+  async function handleCreateTask(e: React.FormEvent) {
     e.preventDefault()
-    const newTask: TaskWithProject = {
-      id: `task-${Date.now()}`,
-      project_id: form.project_id,
-      stage_type: form.stage_type,
-      name: form.name,
-      state: 'pending',
-      color_indicator: 'green',
-      points_awarded: Number(form.points_awarded),
-      all_activities_done: false,
-      sequence: tasks.length * 10 + 10,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      project: { reference: 'PJ-2026-001', customer_name: 'Saudi Electricity Co.' },
-      technician: { full_name: 'Eng. Tariq Al-Masar' },
-      checklist: [
-        { id: `c-${Date.now()}-1`, task_id: `task-${Date.now()}`, name_en: 'Initial inspection of components', name_ar: 'الفحص الأولي للمكونات الكهربائية', sequence: 10, is_done: false },
-        { id: `c-${Date.now()}-2`, task_id: `task-${Date.now()}`, name_en: 'Execute mounting & torque checks', name_ar: 'تنفيذ التثبيت والتربيط بالعزم المطلوب', sequence: 20, is_done: false },
-      ]
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: form.project_id || projects[0]?.id,
+          department: form.department,
+          title: form.title,
+          description: form.description,
+          required_deliverables: form.required_deliverables,
+          estimated_hours: parseFloat(form.estimated_hours as any) || 4,
+          priority: form.priority,
+          assigned_employee_id: form.assigned_employee_id || employees[0]?.id
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowCreateModal(false)
+        setForm({
+          project_id: '',
+          department: 'electrical',
+          title: '',
+          description: '',
+          required_deliverables: '',
+          estimated_hours: 4,
+          priority: 'medium',
+          assigned_employee_id: ''
+        })
+        loadTasks()
+      } else {
+        alert(data.error || 'Failed to create task')
+      }
+    } catch (err) {
+      console.error('Create task error:', err)
     }
-    setTasks([newTask, ...tasks])
-    setShowModal(false)
-    setForm({ name: '', stage_type: 'power_busbar', points_awarded: 40, project_id: 'proj-1' })
   }
 
-  const filtered = tasks.filter(t => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      (t.name && t.name.toLowerCase().includes(q)) ||
-      (t.project?.reference && t.project.reference.toLowerCase().includes(q)) ||
-      (t.technician?.full_name && t.technician.full_name.toLowerCase().includes(q))
-    )
-  })
-
-  const inProgressCount = tasks.filter(t => t.state === 'in_progress').length
-  const doneCount = tasks.filter(t => t.state === 'done').length
-  const delayedCount = tasks.filter(t => t.color_indicator === 'red').length
+  function formatDuration(sec: number) {
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    const s = sec % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
 
   return (
     <AppLayout
-      title="Manufacturing Tasks & Assembly"
-      titleAr="مهام التصنيع وتجميع اللوحات"
+      title="Technician & Engineer Tasks & Time Tracking"
+      titleAr="إدارة مهام الفنيين والمهندسين وتتبع الوقت الفعلي (Server-side Timers)"
       actions={
-        <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
-          {isRtl ? '+ إضافة مهمة تصنيع' : '+ New Task'}
+        <button className="btn btn-primary btn-sm" onClick={() => setShowCreateModal(true)}>
+          {isRtl ? '+ إسناد مهمة جديدة' : '+ Assign New Task'}
         </button>
       }
     >
-      {/* KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        <div className="kpi-card accent">
-          <div className="kpi-icon accent-bg">📋</div>
-          <div className="kpi-value">{tasks.length}</div>
-          <div className="kpi-label">{isRtl ? 'إجمالي مهام المصنع' : 'Total Tasks'}</div>
-        </div>
-        <div className="kpi-card warning">
-          <div className="kpi-icon warning-bg">⚙️</div>
-          <div className="kpi-value">{inProgressCount}</div>
-          <div className="kpi-label">{isRtl ? 'قيد التنفيذ والتجميع' : 'In Progress'}</div>
-        </div>
-        <div className="kpi-card success">
-          <div className="kpi-icon success-bg">✅</div>
-          <div className="kpi-value">{doneCount}</div>
-          <div className="kpi-label">{isRtl ? 'المهام المكتملة' : 'Completed Tasks'}</div>
-        </div>
-        <div className="kpi-card danger">
-          <div className="kpi-icon danger-bg">⚠️</div>
-          <div className="kpi-value">{delayedCount}</div>
-          <div className="kpi-label">{isRtl ? 'مهام متأخرة أو بها ملاحظات' : 'Delayed / Issues'}</div>
-        </div>
-      </div>
+      {/* Active Stopwatch Banner (Workflow 2.2) */}
+      {activeTimer && (
+        <div className="card" style={{ padding: '16px 24px', marginBottom: 20, background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.15))', border: '1px solid #06b6d488' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                ⏱️ {isRtl ? 'المؤقت الزمني الفعلي النشط (مسجل بالخادم):' : 'Active Server-Side Timer Running:'}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                {activeTimer.task_code || 'Task'}: {activeTimer.task_title || 'Panel Activity'}
+              </div>
+            </div>
 
-      {/* Tabs & Search */}
-      <div className="card" style={{ marginTop: 24, padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className={`btn ${activeTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setActiveTab('all')}
-            >
-              🏭 {isRtl ? 'جميع مهام المصنع و QC' : 'All Factory Tasks & QC'} ({tasks.length})
-            </button>
-            <button
-              className={`btn ${activeTab === 'my' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setActiveTab('my')}
-            >
-              👷 {isRtl ? 'مهامي المسندة' : 'My Assigned Tasks'}
-            </button>
-          </div>
-
-          <input
-            type="text"
-            className="input"
-            style={{ width: 280 }}
-            placeholder={isRtl ? '...بحث بالمهام، المشاريع، الفنيين' : 'Search tasks, projects, technicians...'}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        {/* Task Cards List */}
-        <div style={{ display: 'grid', gap: 14, marginTop: 18 }}>
-          {filtered.map(task => {
-            const stateInfo = TASK_STATE_LABELS[task.state]
-            const stageLabel = task.stage_type ? STAGE_TYPE_LABELS[task.stage_type] : null
-            return (
-              <div
-                key={task.id}
-                className="card"
-                style={{
-                  padding: 18,
-                  border: task.state === 'in_progress' ? '1px solid var(--accent)' : '1px solid var(--border)',
-                  background: 'var(--bg-surface)'
-                }}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'monospace', color: '#06b6d4' }}>
+                {formatDuration(elapsedSeconds)}
+              </div>
+              <button
+                className="btn btn-sm btn-warning"
+                onClick={() => handleTimerAction('pause')}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                      <span style={{ fontSize: 18 }}>{task.color_indicator === 'green' ? '🟢' : '🔴'}</span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {task.name}
-                      </span>
-                    </div>
+                ⏸ {isRtl ? 'إيقاف مؤقت' : 'Pause'}
+              </button>
+              <button
+                className="btn btn-sm btn-success"
+                onClick={() => handleTimerAction('stop')}
+              >
+                ⏹ {isRtl ? 'إنهاء وحفظ الوقت' : 'Stop & Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)' }}>
-                      <span>📁 {isRtl ? 'المشروع:' : 'Project:'} <strong>{task.project?.reference}</strong> ({task.project?.customer_name})</span>
-                      <span>🔧 {isRtl ? 'المرحلة:' : 'Stage:'} <strong>{stageLabel ? (stageLabel[lang] || stageLabel.en) : task.stage_type}</strong></span>
-                      <span>👷 {isRtl ? 'الفني:' : 'Technician:'} <strong>{task.technician?.full_name}</strong></span>
-                      <span style={{ color: '#f59e0b', fontWeight: 700 }}>⭐ +{task.points_awarded} {isRtl ? 'نقطة' : 'pts'}</span>
-                    </div>
-                  </div>
+      {/* Task List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {loading && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{isRtl ? 'جاري تحميل المهام...' : 'Loading tasks...'}</div>}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {!loading && tasks.length === 0 && (
+          <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+            {isRtl ? 'لا توجد مهام مسندة حالياً.' : 'No tasks assigned yet.'}
+          </div>
+        )}
+
+        {tasks.map(t => {
+          const isTimerRunning = activeTimer && activeTimer.task_id === t.id
+          return (
+            <div key={t.id} className="card" style={{ padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>{t.task_code}</span>
+                    <span className="badge badge-subtle">{t.department}</span>
+                    <span className="badge badge-subtle" style={{ color: 'var(--accent)' }}>{t.project_reference}</span>
                     <span
-                      className="badge"
+                      className="state-pill"
                       style={{
-                        backgroundColor: `${stateInfo.color}22`,
-                        color: stateInfo.color,
-                        border: `1px solid ${stateInfo.color}44`,
+                        background: t.status === 'completed' || t.status === 'verified' ? '#10b98122' : '#3b82f622',
+                        color: t.status === 'completed' || t.status === 'verified' ? '#10b981' : '#3b82f6'
                       }}
                     >
-                      {stateInfo[lang] || stateInfo.en}
+                      {t.status?.toUpperCase()}
                     </span>
+                  </div>
 
-                    {task.state === 'pending' && (
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => handleStateChange(task.id, 'in_progress')}
-                      >
-                        {isRtl ? 'بدء العمل' : 'Start Task'}
-                      </button>
-                    )}
-                    {task.state === 'in_progress' && (
-                      <button
-                        className="btn btn-sm btn-success"
-                        onClick={() => handleStateChange(task.id, 'done')}
-                      >
-                        ✓ {isRtl ? 'اكتمال واعتماد QC' : 'Complete & Pass QC'}
-                      </button>
-                    )}
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    {t.title}
+                  </div>
+
+                  {t.description && (
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      {t.description}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span>👤 {isRtl ? 'الفني المسند إليه:' : 'Assigned to:'} <strong>{t.assigned_employee_name || 'Unassigned'}</strong></span>
+                    <span>⏱️ {isRtl ? 'الوقت المقدر:' : 'Estimated:'} {t.estimated_hours}h</span>
+                    {t.actual_start && <span>▶ {isRtl ? 'تاريخ البدء:' : 'Started:'} {formatDate(t.actual_start)}</span>}
+                    {t.supervisor_approved && <span style={{ color: '#10b981' }}>✓ {isRtl ? 'معتمد من المشرف' : 'Supervisor Approved'}</span>}
                   </div>
                 </div>
 
-                {/* Sub-activities checklist */}
-                {task.checklist && task.checklist.length > 0 && (
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                      {isRtl ? 'قائمة التحقق وخطوات التنفيذ (Checklist):' : 'Assembly Quality Checklist:'}
-                    </div>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      {task.checklist.map(item => (
-                        <label
-                          key={item.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            fontSize: 13,
-                            cursor: 'pointer',
-                            color: item.is_done ? 'var(--text-muted)' : 'var(--text-primary)',
-                            textDecoration: item.is_done ? 'line-through' : 'none'
-                          }}
-                          onClick={() => toggleChecklist(task.id, item.id)}
+                {/* Timer & Completion Actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 160, alignItems: isRtl ? 'flex-start' : 'flex-end' }}>
+                  {t.status !== 'completed' && t.status !== 'verified' && (
+                    <>
+                      {isTimerRunning ? (
+                        <button
+                          className="btn btn-sm btn-warning"
+                          onClick={() => handleTimerAction('pause')}
                         >
-                          <input
-                            type="checkbox"
-                            checked={item.is_done}
-                            readOnly
-                            style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--success)' }}
-                          />
-                          <span>{isRtl ? item.name_ar : item.name_en}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                          ⏸ {isRtl ? 'إيقاف المؤقت' : 'Pause Timer'}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-accent"
+                          onClick={() => handleTimerAction('start', t.id)}
+                        >
+                          ▶ {isRtl ? 'بدء العمل والمؤقت' : 'Start Timer'}
+                        </button>
+                      )}
+
+                      <button
+                        className="btn btn-sm btn-success"
+                        onClick={() => handleTaskAction(t.id, 'complete', { completion_notes: 'Completed by technician' })}
+                      >
+                        ✓ {isRtl ? 'تسليم وإكمال المهمة' : 'Submit Task'}
+                      </button>
+                    </>
+                  )}
+
+                  {t.status === 'completed' && !t.supervisor_approved && (
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() => handleTaskAction(t.id, 'supervisor_approve', { points_awarded: 25 })}
+                    >
+                      ⭐ {isRtl ? 'اعتماد المشرف وصرف النقاط' : 'Approve & Award Points'}
+                    </button>
+                  )}
+                </div>
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Create Task Modal */}
-      {showModal && (
-        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+      {showCreateModal && (
+        <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleCreateTask}>
               <div className="modal-header">
-                <h3>{isRtl ? 'إضافة مهمة تصنيع وتجميع جديدة' : 'Add Assembly Task'}</h3>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>✕</button>
+                <h3>{isRtl ? 'إسناد مهمة إنتاجية جديدة لفني / مهندس' : 'Assign New Production Task'}</h3>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>✕</button>
               </div>
 
-              <div style={{ padding: 24, display: 'grid', gap: 14 }}>
+              <div style={{ padding: 20, display: 'grid', gap: 14 }}>
                 <div>
-                  <label className="label">{isRtl ? 'اسم المهمة' : 'Task Name'}</label>
+                  <label className="label">{isRtl ? 'المشروع المرتبط' : 'Project'}</label>
+                  <select
+                    className="input"
+                    value={form.project_id}
+                    onChange={e => setForm({ ...form, project_id: e.target.value })}
+                  >
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.reference} - {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'القسم' : 'Department'}</label>
+                    <select
+                      className="input"
+                      value={form.department}
+                      onChange={e => setForm({ ...form, department: e.target.value })}
+                    >
+                      <option value="sheet_metal">{isRtl ? 'أعمال الصاج والهيكل' : 'Sheet Metal'}</option>
+                      <option value="layout">{isRtl ? 'تثبيت المكونات (Layout)' : 'Layout'}</option>
+                      <option value="power_busbar">{isRtl ? 'دوائر القدرة - بسبار نحاس' : 'Power Busbar'}</option>
+                      <option value="power_wires">{isRtl ? 'دوائر القدرة - كابلات وأسلاك' : 'Power Wires'}</option>
+                      <option value="control">{isRtl ? 'دوائر التحكم والـ PLC' : 'Control Circuits'}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'الفني المسند إليه' : 'Assignee'}</label>
+                    <select
+                      className="input"
+                      value={form.assigned_employee_id}
+                      onChange={e => setForm({ ...form, assigned_employee_id: e.target.value })}
+                    >
+                      {employees.map(e => (
+                        <option key={e.id} value={e.profile_id || e.id}>{e.full_name} ({e.job_title})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? 'عنوان المهمة والمطلوب تنفيذه' : 'Task Title & Deliverables'}</label>
                   <input
                     required
                     type="text"
                     className="input"
-                    placeholder={isRtl ? 'مثال: تجميع وتربيط قواطع ACB 3200A' : 'e.g. ACB 3200A Assembly & Torque'}
-                    value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    placeholder={isRtl ? 'تشكيل وتثبيت بسبار رئيسي 80x10 ملم مع العوازل...' : 'Forming and mounting 80x10mm main busbar...'}
+                    value={form.title}
+                    onChange={e => setForm({ ...form, title: e.target.value })}
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label className="label">{isRtl ? 'مرحلة التصنيع' : 'Assembly Stage'}</label>
-                    <select
-                      className="input"
-                      value={form.stage_type}
-                      onChange={e => setForm({ ...form, stage_type: e.target.value as any })}
-                    >
-                      {Object.entries(STAGE_TYPE_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v[lang] || v.en}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">{isRtl ? 'نقاط المكافأة للفني' : 'Reward Points'}</label>
+                    <label className="label">{isRtl ? 'الوقت المقدر (ساعات)' : 'Estimated Hours'}</label>
                     <input
                       type="number"
+                      step="0.5"
                       className="input"
-                      value={form.points_awarded}
-                      onChange={e => setForm({ ...form, points_awarded: Number(e.target.value) })}
+                      value={form.estimated_hours}
+                      onChange={e => setForm({ ...form, estimated_hours: e.target.value as any })}
                     />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'الأولوية' : 'Priority'}</label>
+                    <select
+                      className="input"
+                      value={form.priority}
+                      onChange={e => setForm({ ...form, priority: e.target.value })}
+                    >
+                      <option value="low">{isRtl ? 'منخفضة' : 'Low'}</option>
+                      <option value="medium">{isRtl ? 'متوسطة' : 'Medium'}</option>
+                      <option value="high">{isRtl ? 'عالية' : 'High'}</option>
+                      <option value="urgent">{isRtl ? 'عاجلة جداً' : 'Urgent'}</option>
+                    </select>
                   </div>
                 </div>
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {isRtl ? 'حفظ المهمة' : 'Create Task'}
+                  {isRtl ? 'إسناد المهمة' : 'Assign Task'}
                 </button>
               </div>
             </form>

@@ -8,75 +8,104 @@ import { useLanguage } from '@/context/LanguageContext'
 import { MOCK_PROJECTS } from '@/lib/mockData'
 
 export default function ProjectsPage() {
-  const supabase = createClient()
   const { lang, isRtl } = useLanguage()
-  const [projects, setProjects] = useState<PanelProject[]>(MOCK_PROJECTS)
-  const [loading, setLoading] = useState(false)
+  const [projects, setProjects] = useState<PanelProject[]>([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [filterState, setFilterState] = useState<ProjectState | 'all'>('all')
   const [form, setForm] = useState({
+    name: '',
     customer_name: '', customer_email: '', customer_phone: '',
     location: '', date_delivery: '', description: '', job_order_number: '',
-    monday_link: '', boq_link: '',
+    quotation_amount: 50000, priority: 'medium'
   })
 
-  useEffect(() => { loadProjects() }, [])
+  useEffect(() => { loadProjects() }, [filterState])
 
   async function loadProjects() {
+    setLoading(true)
     try {
-      const { data } = await supabase.from('panel_projects').select('*').order('created_at', { ascending: false })
-      if (data && data.length > 0) {
-        setProjects(data as PanelProject[])
+      const url = `/api/projects?state=${filterState}&search=${encodeURIComponent(search)}`
+      const res = await fetch(url)
+      const data = await res.json()
+      if (data.success) {
+        setProjects(data.data)
       }
-    } catch {
-      // keep mock
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  function handleCreateProject(e: React.FormEvent) {
+  async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault()
-    const newP: PanelProject = {
-      id: `proj-${Date.now()}`,
-      reference: `PJ-2026-00${projects.length + 1}`,
-      customer_name: form.customer_name,
-      customer_email: form.customer_email,
-      customer_phone: form.customer_phone,
-      location: form.location,
-      date_start: new Date().toISOString().split('T')[0],
-      date_delivery: form.date_delivery,
-      description: form.description,
-      state: 'estimation',
-      job_order_number: form.job_order_number || `JO-MS-2026-0${projects.length + 90}`,
-      estimation_duration_days: 3.5,
-      procurement_delay_days: 0,
-      delivery_time_days: 45,
-      overall_progress: 15,
-      total_points: 100,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name || form.customer_name,
+          customer_name: form.customer_name,
+          customer_email: form.customer_email,
+          customer_phone: form.customer_phone,
+          location: form.location,
+          date_delivery: form.date_delivery,
+          description: form.description,
+          job_order_number: form.job_order_number,
+          quotation_amount: form.quotation_amount,
+          priority: form.priority
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowModal(false)
+        setForm({
+          name: '', customer_name: '', customer_email: '', customer_phone: '',
+          location: '', date_delivery: '', description: '', job_order_number: '',
+          quotation_amount: 50000, priority: 'medium'
+        })
+        loadProjects()
+      } else {
+        alert(data.error || 'Failed to create project')
+      }
+    } catch (err) {
+      console.error('Error creating project:', err)
     }
-    setProjects([newP, ...projects])
-    setShowModal(false)
-    setForm({ customer_name: '', customer_email: '', customer_phone: '', location: '', date_delivery: '', description: '', job_order_number: '', monday_link: '', boq_link: '' })
   }
 
-  function advanceState(proj: PanelProject) {
+  async function advanceState(proj: PanelProject) {
     const next = projectStateFlow(proj.state)
     if (!next) return
-    setProjects(prev => prev.map(p => {
-      if (p.id === proj.id) {
-        const nextProgress = Math.min(100, (p.overall_progress || 0) + 12)
-        return { ...p, state: next, overall_progress: nextProgress }
+    const nextProgress = Math.min(100, (proj.overall_progress || 0) + 12)
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: proj.id,
+          state: next,
+          overall_progress: nextProgress
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        loadProjects()
       }
-      return p
-    }))
+    } catch (err) {
+      console.error('Failed to advance state:', err)
+    }
   }
 
-  const filtered = projects.filter(p => {
-    const matchSearch = p.reference.toLowerCase().includes(search.toLowerCase()) ||
-      p.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.job_order_number || '').toLowerCase().includes(search.toLowerCase())
+  const safeProjects = Array.isArray(projects) ? projects : []
+  const filtered = safeProjects.filter(p => {
+    if (!p) return false
+    const ref = (p.reference || '').toLowerCase()
+    const cust = (p.customer_name || '').toLowerCase()
+    const jo = (p.job_order_number || '').toLowerCase()
+    const q = (search || '').toLowerCase()
+    const matchSearch = !q || ref.includes(q) || cust.includes(q) || jo.includes(q)
     const matchState = filterState === 'all' || p.state === filterState
     return matchSearch && matchState
   })
@@ -168,10 +197,10 @@ export default function ProjectsPage() {
                 {/* Progress & Next stage button */}
                 <div style={{ textAlign: isRtl ? 'left' : 'right', minWidth: 160 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                    {isRtl ? 'نسبة إنجاز التصنيع' : 'Manufacturing Progress'} ({proj.overall_progress?.toFixed(0)}%)
+                    {isRtl ? 'نسبة إنجاز التصنيع' : 'Manufacturing Progress'} ({Number(proj.overall_progress || 0).toFixed(0)}%)
                   </div>
                   <div className="progress-bar-wrapper" style={{ width: 160, marginBottom: 12 }}>
-                    <div className="progress-bar" style={{ width: `${proj.overall_progress || 0}%` }} />
+                    <div className="progress-bar" style={{ width: `${Number(proj.overall_progress || 0)}%` }} />
                   </div>
 
                   {nextState && (

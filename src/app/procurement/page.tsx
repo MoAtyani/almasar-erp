@@ -8,9 +8,8 @@ import { useLanguage } from '@/context/LanguageContext'
 import { MOCK_PURCHASE_ORDERS } from '@/lib/mockData'
 
 export default function ProcurementPage() {
-  const supabase = createClient()
   const { lang, isRtl } = useLanguage()
-  const [pos, setPos] = useState<(PurchaseOrder & { project?: { reference: string } })[]>(MOCK_PURCHASE_ORDERS)
+  const [pos, setPos] = useState<any[]>(MOCK_PURCHASE_ORDERS)
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
@@ -24,41 +23,42 @@ export default function ProcurementPage() {
 
   async function loadAll() {
     try {
-      const { data } = await supabase.from('purchase_orders').select('*, project:panel_projects(reference), lines:purchase_order_lines(*)').order('created_at', { ascending: false })
-      if (data && data.length > 0) {
-        setPos(data as any)
+      const res = await fetch('/api/procurement?view=orders').then(r => r.json())
+      if (res.success && res.data.length > 0) {
+        setPos(res.data)
       }
-    } catch {
-      // keep mock
-    }
+    } catch {}
   }
 
   function handleStateChange(id: string, newState: PoState) {
     setPos(prev => prev.map(p => p.id === id ? { ...p, state: newState } : p))
   }
 
-  function handleCreatePo(e: React.FormEvent) {
+  async function handleCreatePo(e: React.FormEvent) {
     e.preventDefault()
-    const newPo = {
-      id: `po-${Date.now()}`,
-      reference: `PO/2026/0${140 + pos.length + 1}`,
-      supplier_name: form.supplier_name,
-      supplier_email: form.supplier_email,
-      state: 'draft' as PoState,
-      order_date: new Date().toISOString().split('T')[0],
-      expected_date: form.expected_date,
-      total_amount: parseFloat(form.total_amount) || 0,
-      notes: form.notes,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      project: { reference: 'PJ-2026-001' },
-      lines: [
-        { id: `pol-${Date.now()}`, po_id: `po-${Date.now()}`, product_name: 'Raw Materials & Breakers', quantity: 1, unit_price: parseFloat(form.total_amount) || 0, total_price: parseFloat(form.total_amount) || 0 }
-      ]
+    try {
+      const res = await fetch('/api/procurement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_po',
+          supplier_name: form.supplier_name,
+          supplier_contact: form.supplier_email,
+          expected_delivery_date: form.expected_date,
+          lines: [
+            { item_description: 'Raw Materials & Components', quantity: 1, unit_price: parseFloat(form.total_amount) || 0 }
+          ]
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowModal(false)
+        setForm({ supplier_name: '', supplier_email: '', total_amount: '', expected_date: '', notes: '', project_id: 'proj-1' })
+        loadAll()
+      }
+    } catch (err) {
+      console.error(err)
     }
-    setPos([newPo, ...pos])
-    setShowModal(false)
-    setForm({ supplier_name: '', supplier_email: '', total_amount: '', expected_date: '', notes: '', project_id: 'proj-1' })
   }
 
   const filtered = pos.filter(p =>
@@ -135,7 +135,7 @@ export default function ProcurementPage() {
             </thead>
             <tbody>
               {filtered.map(po => {
-                const info = PO_STATE_LABELS[po.state]
+                const info = (PO_STATE_LABELS as any)[po.state] || { en: po.state, ar: po.state, color: '#6b7280' }
                 return (
                   <tr key={po.id}>
                     <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{po.reference}</td>

@@ -208,17 +208,17 @@ export default function AccountingPage() {
     }
 
     try {
-      await supabase.from('invoices').insert({
-        reference: newInv.reference,
-        invoice_type: newInv.invoice_type,
-        partner_name: newInv.partner_name,
-        invoice_date: newInv.invoice_date,
-        due_date: newInv.due_date,
-        state: newInv.state,
-        amount_untaxed: newInv.amount_untaxed,
-        tax_amount: newInv.tax_amount,
-        total_amount: newInv.total_amount,
-        notes: newInv.notes,
+      await fetch('/api/finance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'log_expense',
+          category: formData.invoice_type === 'customer' ? 'operational' : 'purchases',
+          description: `Invoice ${newRef}: ${formData.partner_name} - ${formData.notes || 'Panel Milestone'}`,
+          amount: total,
+          supplier_name: formData.partner_name,
+          user_id: 'usr-admin'
+        })
       })
     } catch {}
 

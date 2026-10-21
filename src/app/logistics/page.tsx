@@ -38,34 +38,67 @@ export default function LogisticsPage() {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ project_id: '', origin: '', destination: '', scheduled_date: '', notes: '' })
 
+  const [projects, setProjects] = useState<any[]>([])
+
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
+    setLoading(true)
     try {
-      const { data } = await supabase.from('stock_transfers').select('*, project:panel_projects(reference,customer_name)').eq('transfer_type', 'outgoing').order('created_at', { ascending: false })
-      if (data && data.length > 0) setDeliveries(data as any)
-    } catch {}
+      const [delRes, prjRes] = await Promise.all([
+        fetch('/api/sales?view=deliveries').then(r => r.json()),
+        fetch('/api/projects').then(r => r.json())
+      ])
+      if (delRes.success && delRes.data?.length > 0) {
+        setDeliveries(delRes.data.map((d: any) => ({
+          id: d.id,
+          reference: d.dn_number,
+          project: { reference: d.project_reference, customer_name: d.customer_name },
+          origin: 'Al-Masar Factory Bay 2',
+          destination: d.recipient_name || 'Client Substation Site',
+          scheduled_date: d.scheduled_date ? d.scheduled_date.split('T')[0] : '',
+          state: d.status === 'dispatched' ? 'done' : 'ready',
+          notes: d.delivery_notes || d.items_summary
+        })))
+      }
+      if (prjRes.success && prjRes.data?.length > 0) {
+        setProjects(prjRes.data)
+        setForm(f => ({ ...f, project_id: f.project_id || prjRes.data[0].id }))
+      }
+    } catch {} finally {
+      setLoading(false)
+    }
   }
 
   function handleStateChange(id: string, newState: TransferState) {
     setDeliveries(prev => prev.map(d => d.id === id ? { ...d, state: newState, done_date: newState === 'done' ? new Date().toISOString().split('T')[0] : d.done_date } : d))
   }
 
-  function handleCreateDelivery(e: React.FormEvent) {
+  async function handleCreateDelivery(e: React.FormEvent) {
     e.preventDefault()
-    const newDel = {
-      id: `del-${Date.now()}`,
-      reference: `DN/2026/00${deliveries.length + 20}`,
-      project: { reference: 'PJ-2026-001', customer_name: 'Saudi Electricity Co.' },
-      origin: form.origin || 'Al-Masar Factory',
-      destination: form.destination,
-      scheduled_date: form.scheduled_date,
-      state: 'ready' as TransferState,
-      notes: form.notes,
+    try {
+      const res = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_delivery_note',
+          project_id: form.project_id || projects[0]?.id,
+          scheduled_date: form.scheduled_date,
+          recipient_name: form.destination,
+          delivery_notes: form.notes
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowModal(false)
+        setForm({ project_id: '', origin: '', destination: '', scheduled_date: '', notes: '' })
+        loadAll()
+      } else {
+        alert(data.error || 'Failed to create delivery note')
+      }
+    } catch (err) {
+      console.error(err)
     }
-    setDeliveries([newDel, ...deliveries])
-    setShowModal(false)
-    setForm({ project_id: '', origin: '', destination: '', scheduled_date: '', notes: '' })
   }
 
   const packingCount = deliveries.filter(d => d.state === 'draft').length
@@ -124,7 +157,7 @@ export default function LogisticsPage() {
             </thead>
             <tbody>
               {deliveries.map(del => {
-                const info = TRANSFER_STATE_LABELS[del.state]
+                const info = (TRANSFER_STATE_LABELS as any)[del.state] || { en: del.state, ar: del.state, color: '#6b7280' }
                 return (
                   <tr key={del.id}>
                     <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{del.reference}</td>

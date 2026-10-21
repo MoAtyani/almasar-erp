@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
-import { createClient } from '@/lib/supabase/client'
 import { STAGE_TYPE_LABELS, ROLE_LABELS } from '@/lib/constants'
 import { StageType, UserRole } from '@/lib/types'
 import { useLanguage } from '@/context/LanguageContext'
@@ -17,140 +16,182 @@ const DEFAULT_TEMPLATES = [
   { id: 't8', name_en: 'Dielectric High Voltage 2.5kV & Megger FAT', name_ar: 'اختبار الجهد العالي 2.5 ك.ف وفحص الميجر للعزل', stage_type: 'final_test' as StageType, sequence: 10, default_points: 40 },
 ]
 
-const DEFAULT_USERS = [
-  { id: 'u1', full_name: 'Eng. Tariq Al-Masar', full_name_ar: 'م. طارق المسار', email: 'admin@almasar-switchgear.com', role: 'general_manager' as UserRole, department: 'Executive' },
-  { id: 'u2', full_name: 'Eng. Ahmed Al-Mansoor', full_name_ar: 'م. أحمد المنصور', email: 'ahmed.m@almasar-switchgear.com', role: 'design_engineer' as UserRole, department: 'Engineering' },
-  { id: 'u3', full_name: 'Tariq Al-Harbi', full_name_ar: 'طارق الحربي', email: 'tariq.h@almasar-switchgear.com', role: 'production_supervisor' as UserRole, department: 'Production' },
-  { id: 'u4', full_name: 'Hassan Al-Otaibi', full_name_ar: 'حسن العتيبي', email: 'hassan.o@almasar-switchgear.com', role: 'qc_technician' as UserRole, department: 'Quality' },
-  { id: 'u5', full_name: 'Mohammed Salem', full_name_ar: 'محمد سالم', email: 'mohammed.s@almasar-switchgear.com', role: 'technician' as UserRole, department: 'Workshop' },
-]
-
 export default function ConfigPage() {
-  const supabase = createClient()
   const { lang, isRtl } = useLanguage()
-  const [tab, setTab] = useState<'templates' | 'users'>('templates')
+  const [tab, setTab] = useState<'users' | 'templates'>('users')
   const [templates, setTemplates] = useState<any[]>(DEFAULT_TEMPLATES)
-  const [users, setUsers] = useState<any[]>(DEFAULT_USERS)
+  const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  
+  // Template Modal
   const [showTemplateModal, setShowTemplateModal] = useState(false)
-  const [form, setForm] = useState({ name_en: '', name_ar: '', stage_type: 'sheet_metal' as StageType, sequence: '10', default_points: '20' })
+  const [templateForm, setTemplateForm] = useState({ name_en: '', name_ar: '', stage_type: 'sheet_metal' as StageType, sequence: '10', default_points: '20' })
+  
+  // User Modals (Add / Edit)
+  const [showUserModal, setShowUserModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<any | null>(null)
+  const [userForm, setUserForm] = useState({
+    full_name: '',
+    full_name_ar: '',
+    email: '',
+    role: 'technician',
+    department: 'Production',
+    phone: '',
+    is_active: true
+  })
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
+    setLoading(true)
     try {
-      const [{ data: t }, { data: u }] = await Promise.all([
-        supabase.from('activity_templates').select('*').is('parent_id', null).order('stage_type').order('sequence'),
-        supabase.from('profiles').select('*').order('full_name'),
-      ])
-      if (t && t.length > 0) setTemplates(t)
-      if (u && u.length > 0) setUsers(u)
-    } catch {}
-  }
-
-  function handleCreateTemplate(e: React.FormEvent) {
-    e.preventDefault()
-    const newT = {
-      id: `tmpl-${Date.now()}`,
-      name_en: form.name_en,
-      name_ar: form.name_ar,
-      stage_type: form.stage_type,
-      sequence: parseInt(form.sequence) || 10,
-      default_points: parseInt(form.default_points) || 20,
+      const res = await fetch('/api/users')
+      const data = await res.json()
+      if (data.success && Array.isArray(data.data)) {
+        setUsers(data.data)
+      }
+    } catch (e) {
+      console.error('Failed to load users:', e)
+    } finally {
+      setLoading(false)
     }
-    setTemplates([...templates, newT])
-    setShowTemplateModal(false)
-    setForm({ name_en: '', name_ar: '', stage_type: 'sheet_metal', sequence: '10', default_points: '20' })
   }
 
-  function handleDeleteTemplate(id: string) {
-    setTemplates(prev => prev.filter(t => t.id !== id))
+  async function handleSaveUser(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      const isEdit = !!editingUser
+      const url = '/api/users'
+      const method = isEdit ? 'PUT' : 'POST'
+      const body = isEdit ? { id: editingUser.id, ...userForm } : userForm
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowUserModal(false)
+        setEditingUser(null)
+        setUserForm({
+          full_name: '',
+          full_name_ar: '',
+          email: '',
+          role: 'technician',
+          department: 'Production',
+          phone: '',
+          is_active: true
+        })
+        loadAll()
+      } else {
+        alert(data.error || 'Failed to save user')
+      }
+    } catch (err) {
+      console.error('Error saving user:', err)
+    }
   }
 
-  function handleUpdateUserRole(id: string, role: UserRole) {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, role } : u))
+  async function handleDeleteUser(id: string, name: string) {
+    if (!confirm(isRtl ? `هل أنت متأكد من حذف المستخدم: ${name}؟` : `Are you sure you want to delete user: ${name}?`)) {
+      return
+    }
+    try {
+      const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        loadAll()
+      } else {
+        alert(data.error || 'Failed to delete user')
+      }
+    } catch (err) {
+      console.error('Error deleting user:', err)
+    }
+  }
+
+  async function handleQuickRoleChange(userId: string, newRole: string) {
+    try {
+      await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, role: newRole })
+      })
+      loadAll()
+    } catch (err) {
+      console.error('Failed to update role:', err)
+    }
+  }
+
+  function openEditModal(u: any) {
+    setEditingUser(u)
+    setUserForm({
+      full_name: u.full_name || '',
+      full_name_ar: u.full_name_ar || '',
+      email: u.email || '',
+      role: u.role || 'technician',
+      department: u.department || 'Production',
+      phone: u.phone || '',
+      is_active: u.is_active !== undefined ? !!u.is_active : true
+    })
+    setShowUserModal(true)
+  }
+
+  function openAddModal() {
+    setEditingUser(null)
+    setUserForm({
+      full_name: '',
+      full_name_ar: '',
+      email: '',
+      role: 'technician',
+      department: 'Production',
+      phone: '',
+      is_active: true
+    })
+    setShowUserModal(true)
   }
 
   return (
-    <AppLayout title="Factory Configuration" titleAr="إعدادات المصنع والمراحل والصلاحيات">
+    <AppLayout
+      title="System Configuration & User Management"
+      titleAr="إعدادات النظام وإدارة المستخدمين والصلاحيات"
+      actions={
+        tab === 'users' ? (
+          <button className="btn btn-primary btn-sm" onClick={openAddModal}>
+            {isRtl ? '+ إضافة مستخدم جديد' : '+ Add User'}
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={() => setShowTemplateModal(true)}>
+            {isRtl ? '+ إضافة قالب مرحلة جديد' : '+ Add Template'}
+          </button>
+        )
+      }
+    >
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <button
-          className={`btn ${tab === 'templates' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setTab('templates')}
-        >
-          ⚙️ {isRtl ? 'قوالب مراحل التجميع ونقاط الفنيين' : 'Assembly Stage Templates & Points'}
-        </button>
         <button
           className={`btn ${tab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setTab('users')}
         >
-          👥 {isRtl ? 'المستخدمين والصلاحيات والأدوار' : 'Users & Access Roles'}
+          👥 {isRtl ? `المستخدمون والأدوار (${users.length})` : `Users & Roles (${users.length})`}
+        </button>
+        <button
+          className={`btn ${tab === 'templates' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setTab('templates')}
+        >
+          ⚙️ {isRtl ? `قوالب مراحل التصنيع (${templates.length})` : `Assembly Templates (${templates.length})`}
         </button>
       </div>
 
-      {tab === 'templates' && (
+      {/* Users Tab */}
+      {tab === 'users' && (
         <div className="card" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ fontSize: 16, fontWeight: 700 }}>
-              {isRtl ? 'قوالب مراحل تصنيع اللوحات الكهربائية' : 'Standard Switchgear Assembly Templates'}
+              {isRtl ? 'إدارة أدوار وصلاحيات طاقم المصنع والمهندسين' : 'User Roles & System Permissions Matrix'}
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowTemplateModal(true)}>
-              {isRtl ? '+ إضافة خطوة معيارية' : '+ New Template'}
+            <button className="btn btn-primary btn-sm" onClick={openAddModal}>
+              {isRtl ? '+ إضافة مستخدم' : '+ Add User'}
             </button>
-          </div>
-
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{isRtl ? 'المرحلة' : 'STAGE'}</th>
-                  <th>{isRtl ? 'اسم الخطوة (عربي / English)' : 'ACTIVITY NAME'}</th>
-                  <th>{isRtl ? 'الترتيب' : 'SEQ'}</th>
-                  <th>{isRtl ? 'نقاط المكافأة المعتمدة' : 'POINTS'}</th>
-                  <th>{isRtl ? 'الإجراءات' : 'ACTIONS'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {templates.map(tmpl => {
-                  const stageInfo = STAGE_TYPE_LABELS[tmpl.stage_type as StageType]
-                  return (
-                    <tr key={tmpl.id}>
-                      <td>
-                        <span className="badge badge-subtle">
-                          {stageInfo ? (stageInfo[lang] || stageInfo.en) : tmpl.stage_type}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{isRtl ? tmpl.name_ar : tmpl.name_en}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isRtl ? tmpl.name_en : tmpl.name_ar}</div>
-                      </td>
-                      <td>{tmpl.sequence}</td>
-                      <td>
-                        <span style={{ color: '#f59e0b', fontWeight: 700 }}>
-                          ⭐ {tmpl.default_points} {isRtl ? 'نقطة' : 'pts'}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() => handleDeleteTemplate(tmpl.id)}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {tab === 'users' && (
-        <div className="card" style={{ padding: '16px 20px' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
-            {isRtl ? 'إدارة أدوار وصلاحيات طاقم المصنع' : 'User Roles & System Permissions'}
           </div>
 
           <div className="table-container">
@@ -160,7 +201,9 @@ export default function ConfigPage() {
                   <th>{isRtl ? 'الاسم' : 'NAME'}</th>
                   <th>{isRtl ? 'البريد الإلكتروني' : 'EMAIL'}</th>
                   <th>{isRtl ? 'القسم' : 'DEPARTMENT'}</th>
-                  <th>{isRtl ? 'الدور الوظيفي' : 'ROLE'}</th>
+                  <th>{isRtl ? 'الدور والصلاحيات' : 'ROLE & PERMISSIONS'}</th>
+                  <th>{isRtl ? 'الحالة' : 'STATUS'}</th>
+                  <th>{isRtl ? 'الإجراءات' : 'ACTIONS'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -168,21 +211,45 @@ export default function ConfigPage() {
                   <tr key={u.id}>
                     <td>
                       <div><strong>{isRtl && u.full_name_ar ? u.full_name_ar : u.full_name}</strong></div>
-                      {u.full_name_ar && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{isRtl ? u.full_name : u.full_name_ar}</div>}
+                      {u.user_code && <span className="badge badge-subtle">{u.user_code}</span>}
+                      {u.phone && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>📞 {u.phone}</div>}
                     </td>
                     <td>{u.email}</td>
                     <td>{u.department || 'Operations'}</td>
                     <td>
                       <select
                         className="input"
-                        style={{ width: 200, padding: '4px 8px' }}
+                        style={{ width: 220, padding: '4px 8px' }}
                         value={u.role}
-                        onChange={e => handleUpdateUserRole(u.id, e.target.value as UserRole)}
+                        onChange={e => handleQuickRoleChange(u.id, e.target.value)}
                       >
                         {Object.entries(ROLE_LABELS).map(([k, v]) => (
                           <option key={k} value={k}>{v[lang] || v.en}</option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <span className={`badge ${u.is_active ? 'badge-success' : 'badge-danger'}`}>
+                        {u.is_active ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Inactive')}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => openEditModal(u)}
+                          title={isRtl ? 'تعديل' : 'Edit'}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeleteUser(u.id, u.full_name)}
+                          title={isRtl ? 'حذف' : 'Delete'}
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -192,82 +259,218 @@ export default function ConfigPage() {
         </div>
       )}
 
+      {/* Templates Tab */}
+      {tab === 'templates' && (
+        <div className="card" style={{ padding: '16px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              {isRtl ? 'قوالب خطوات التجميع والفحص المعيارية' : 'Standard Manufacturing Activity Templates'}
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowTemplateModal(true)}>
+              {isRtl ? '+ إضافة خطوة معيارية' : '+ Add Activity'}
+            </button>
+          </div>
+
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{isRtl ? 'المرحلة' : 'STAGE'}</th>
+                  <th>{isRtl ? 'اسم الخطوة' : 'ACTIVITY'}</th>
+                  <th>{isRtl ? 'الترتيب' : 'SEQ'}</th>
+                  <th>{isRtl ? 'نقاط المكافأة' : 'POINTS'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {templates.map(t => {
+                  const sInfo = STAGE_TYPE_LABELS[t.stage_type as StageType] || { en: t.stage_type, ar: t.stage_type }
+                  return (
+                    <tr key={t.id}>
+                      <td><span className="state-pill">{sInfo[lang] || sInfo.en}</span></td>
+                      <td>
+                        <strong>{isRtl ? t.name_ar : t.name_en}</strong>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{isRtl ? t.name_en : t.name_ar}</div>
+                      </td>
+                      <td>{t.sequence}</td>
+                      <td><span style={{ color: '#f59e0b', fontWeight: 700 }}>⭐ {t.default_points}</span></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* User Modal (Add / Edit) */}
+      {showUserModal && (
+        <div className="modal-backdrop" onClick={() => setShowUserModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleSaveUser}>
+              <div className="modal-header">
+                <h3>
+                  {editingUser
+                    ? (isRtl ? 'تعديل بيانات المستخدم والصلاحيات' : 'Edit User & Permissions')
+                    : (isRtl ? 'إضافة مستخدم جديد للنظام' : 'Add New User')}
+                </h3>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowUserModal(false)}>✕</button>
+              </div>
+
+              <div style={{ padding: 24, display: 'grid', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'الاسم بالإنجليزية' : 'Full Name (English)'}</label>
+                    <input
+                      required
+                      type="text"
+                      className="input"
+                      placeholder="e.g. Eng. Khalid Mansoor"
+                      value={userForm.full_name}
+                      onChange={e => setUserForm({ ...userForm, full_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'الاسم بالعربية' : 'Full Name (Arabic)'}</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="م. خالد منصور"
+                      value={userForm.full_name_ar}
+                      onChange={e => setUserForm({ ...userForm, full_name_ar: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'البريد الإلكتروني' : 'Email'}</label>
+                    <input
+                      required
+                      type="email"
+                      className="input"
+                      placeholder="khalid@almasar-switchgear.com"
+                      value={userForm.email}
+                      onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'رقم الهاتف' : 'Phone'}</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="+966 50 123 4567"
+                      value={userForm.phone}
+                      onChange={e => setUserForm({ ...userForm, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'القسم' : 'Department'}</label>
+                    <select
+                      className="input"
+                      value={userForm.department}
+                      onChange={e => setUserForm({ ...userForm, department: e.target.value })}
+                    >
+                      <option value="Production">Production & Assembly</option>
+                      <option value="Engineering & Estimation">Engineering & Design</option>
+                      <option value="Quality Assurance">Quality Assurance (QC)</option>
+                      <option value="Warehouse & Logistics">Warehouse & Logistics</option>
+                      <option value="Finance & Accounting">Finance & Accounting</option>
+                      <option value="Human Resources">Human Resources (HR)</option>
+                      <option value="Management">Management & Executive</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="label">{isRtl ? 'الدور الوظيفي والصلاحيات' : 'Role & Permissions'}</label>
+                    <select
+                      className="input"
+                      value={userForm.role}
+                      onChange={e => setUserForm({ ...userForm, role: e.target.value })}
+                    >
+                      {Object.entries(ROLE_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v[lang] || v.en}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={userForm.is_active}
+                      onChange={e => setUserForm({ ...userForm, is_active: e.target.checked })}
+                    />
+                    <span>{isRtl ? 'حساب نشط ومفعل' : 'Active Account'}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowUserModal(false)}>
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {isRtl ? 'حفظ البيانات' : 'Save User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Template Modal */}
       {showTemplateModal && (
         <div className="modal-backdrop" onClick={() => setShowTemplateModal(false)}>
           <div className="modal-content" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-            <form onSubmit={handleCreateTemplate}>
+            <form onSubmit={e => { e.preventDefault(); setShowTemplateModal(false); }}>
               <div className="modal-header">
-                <h3>{isRtl ? 'إضافة خطوة معيارية جديدة لمرحلة التصنيع' : 'Add Assembly Template'}</h3>
+                <h3>{isRtl ? 'إضافة خطوة معيارية جديدة' : 'Add Assembly Template'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowTemplateModal(false)}>✕</button>
               </div>
-
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
                 <div>
                   <label className="label">{isRtl ? 'المرحلة' : 'Stage'}</label>
                   <select
                     className="input"
-                    value={form.stage_type}
-                    onChange={e => setForm({ ...form, stage_type: e.target.value as StageType })}
+                    value={templateForm.stage_type}
+                    onChange={e => setTemplateForm({ ...templateForm, stage_type: e.target.value as StageType })}
                   >
                     {Object.entries(STAGE_TYPE_LABELS).map(([k, v]) => (
                       <option key={k} value={k}>{v[lang] || v.en}</option>
                     ))}
                   </select>
                 </div>
-
                 <div>
                   <label className="label">{isRtl ? 'اسم الخطوة (بالعربي)' : 'Activity Name (Arabic)'}</label>
                   <input
                     required
                     type="text"
                     className="input"
-                    placeholder="مثال: فحص عزل أطوار البسبار 1000 فولت"
-                    value={form.name_ar}
-                    onChange={e => setForm({ ...form, name_ar: e.target.value })}
+                    value={templateForm.name_ar}
+                    onChange={e => setTemplateForm({ ...templateForm, name_ar: e.target.value })}
                   />
                 </div>
-
                 <div>
                   <label className="label">{isRtl ? 'اسم الخطوة (بالإنجليزي)' : 'Activity Name (English)'}</label>
                   <input
                     required
                     type="text"
                     className="input"
-                    placeholder="e.g. 1000V Megger phase insulation check"
-                    value={form.name_en}
-                    onChange={e => setForm({ ...form, name_en: e.target.value })}
+                    value={templateForm.name_en}
+                    onChange={e => setTemplateForm({ ...templateForm, name_en: e.target.value })}
                   />
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div>
-                    <label className="label">{isRtl ? 'الترتيب' : 'Sequence'}</label>
-                    <input
-                      type="number"
-                      className="input"
-                      value={form.sequence}
-                      onChange={e => setForm({ ...form, sequence: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">{isRtl ? 'نقاط المكافأة المكتسبة' : 'Reward Points'}</label>
-                    <input
-                      type="number"
-                      className="input"
-                      value={form.default_points}
-                      onChange={e => setForm({ ...form, default_points: e.target.value })}
-                    />
-                  </div>
-                </div>
               </div>
-
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowTemplateModal(false)}>
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {isRtl ? 'حفظ القالب' : 'Save Template'}
+                  {isRtl ? 'حفظ' : 'Save'}
                 </button>
               </div>
             </form>
