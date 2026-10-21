@@ -3,71 +3,101 @@ import { useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { SupportTicket, TicketPriority, TicketState } from '@/lib/types'
 import { TICKET_PRIORITY_LABELS, TICKET_STATE_LABELS, formatDate } from '@/lib/constants'
+import { useLanguage } from '@/context/LanguageContext'
 
 const SEED_TICKETS: SupportTicket[] = [
   {
     id: 't-1',
     ticket_number: 'HD-2026-081',
-    subject: 'Main ACB 2500A Micrologic 6.0E Trip Alarm on Substation Power-Up',
-    customer_name: 'Saudi Electricity Co. (SEC)',
+    subject: 'Trip alarm on 2500A Main ACB (Micrologic 6.0E) during energization',
+    subject_ar: 'إنذار فصل القاطع الهوائي الرئيسي 2500A (Micrologic 6.0E) أثناء إطلاق التيار',
+    customer_name: 'Saudi Electricity Company (SEC)',
+    customer_name_ar: 'الشركة السعودية للكهرباء (SEC)',
     project_reference: 'PJ-2026-001',
     panel_serial_number: 'SN-MS-2026-0019',
     priority: 'critical',
     state: 'in_progress',
     assigned_to: 'Eng. Ahmed Al-Mansoor',
-    description: 'During site energization, the 2500A incoming ACB tripped on instantaneous overcurrent. Protection curves need verification with upstream substation relays.',
-    resolution_notes: 'Site visit scheduled for 21-Oct. Relay test kit calibrated.',
+    assigned_to_ar: 'م. أحمد المنصور',
+    description: 'During site energization, the 2500A ACB tripped on instantaneous overcurrent. Protection relay curves must be coordinated with upstream substation breakers.',
+    description_ar: 'أثناء إطلاق التيار بالمحطة، فصل القاطع 2500A على تيار لحظي زائد. يلزم ضبط ومطابقة منحنيات الحماية مع قواطع المحطة المغذية.',
+    resolution_notes: 'Site visit scheduled for relay testing. Secondary injection test kit prepared.',
+    resolution_notes_ar: 'تمت جدولة زيارة ميدانية لفريق الهندسة. جهاز اختبار الترحيل بحقن التيار الثانوي جاهز.',
     created_at: '2026-10-19T09:00:00Z',
     updated_at: '2026-10-20T14:30:00Z',
   },
   {
     id: 't-2',
     ticket_number: 'HD-2026-080',
-    subject: 'Capacitor Bank Automatic Power Factor Controller Alarm (C/K ratio)',
-    customer_name: 'Al-Bawani Contracting',
+    subject: 'Capacitor bank automatic PFC regulator (C/K ratio) hunting alarm',
+    subject_ar: 'إنذار منظم معامل القدرة الآلي (PFC C/K ratio) في لوحة المكثفات',
+    customer_name: 'Al-Bawani Contracting Co.',
+    customer_name_ar: 'شركة البواني للمقاولات',
     project_reference: 'PJ-2026-002',
     panel_serial_number: 'SN-MS-2026-0024',
     priority: 'high',
     state: 'waiting',
     assigned_to: 'Mohammed Salem',
-    description: 'The Varlogic PFC controller indicates stage 3 hunting and defective step contactor under partial factory load.',
-    resolution_notes: 'Replacement Schneider LC1DPK contactor dispatched from warehouse.',
+    assigned_to_ar: 'محمد سالم',
+    description: 'Varlogic controller displays hunting on step 3 and chatter on capacitor contactor under partial plant load.',
+    description_ar: 'جهاز التحكم Varlogic يظهر تذبذب في الخطوة 3 وخلل بكونتاكتور المكثف عند الحمل الجزئي.',
+    resolution_notes: 'Replacement Schneider LC1DPK contactor issued from warehouse for dispatch.',
+    resolution_notes_ar: 'تم صرف كونتاكتور بديل شنايدر LC1DPK من المستودع للتسليم.',
     created_at: '2026-10-18T11:20:00Z',
     updated_at: '2026-10-19T16:00:00Z',
   },
   {
     id: 't-3',
     ticket_number: 'HD-2026-079',
-    subject: 'Annual Preventative Thermal Imaging & Busbar Torque Audit',
-    customer_name: 'Nesma Infrastructure',
+    subject: 'Annual copper busbar thermography & torque inspection request',
+    subject_ar: 'طلب فحص حراري دوري بالأشعة تحت الحمراء وعزم تربيط البسبار النحاسي',
+    customer_name: 'Nesma Infrastructure & Tech',
+    customer_name_ar: 'شركة نسما للبنية التحتية',
     project_reference: 'PJ-2025-098',
     panel_serial_number: 'SN-MS-2025-0841',
     priority: 'medium',
     state: 'resolved',
     assigned_to: 'Hassan Al-Otaibi',
-    description: 'Client requested routine infrared thermographic scan and torque re-tightening for all copper busbar bolted connections after 12 months in service.',
-    resolution_notes: 'Completed. All joints verified under 45 Nm torque. Thermography report delivered with zero hot spots.',
+    assigned_to_ar: 'حسن العتيبي',
+    description: 'Client requested complete IR thermographic survey of busbar joints and bolt retorquing after 12 months operation.',
+    description_ar: 'طلب العميل إجراء مسح حراري لكافة وصلات البسبار وإعادة شد المسامير بعد مرور عام على التشغيل.',
+    resolution_notes: 'Inspection completed. All joints torqued to 45 N.m. No thermal hotspots detected.',
+    resolution_notes_ar: 'تم الفحص. كافة الوصلات مشدودة بعزم 45 نيوتن.متر ولا توجد أي نقاط ساخنة.',
     created_at: '2026-10-12T08:00:00Z',
     updated_at: '2026-10-15T11:00:00Z',
   },
   {
     id: 't-4',
     ticket_number: 'HD-2026-078',
-    subject: 'Auxiliary Door Interlock Key Duplicate Request',
-    customer_name: 'Binladin Group',
+    subject: 'Spare mechanical Castell safety interlock key request for Form 4b',
+    subject_ar: 'طلب نسخة إضافية لمفتاح الأمان الداخلي الميكانيكي (Castell Key)',
+    customer_name: 'Saudi Binladin Group (SBG)',
+    customer_name_ar: 'مجموعة بن لادن السعودية',
     project_reference: 'PJ-2026-003',
     panel_serial_number: 'SN-MS-2026-0031',
     priority: 'low',
     state: 'closed',
     assigned_to: 'Tariq Al-Harbi',
-    description: 'Client facility manager requested 2 extra Castell safety interlock keys for Form 4b enclosure access.',
-    resolution_notes: 'Castell keys engraved and delivered via logistics transfer.',
+    assigned_to_ar: 'طارق الحربي',
+    description: 'Maintenance manager requested 2 spare coded keys for Form 4b compartment interlocks.',
+    description_ar: 'طلب مدير الصيانة نسختين إضافيتين لمفاتيح قفل أبواب خلايا Form 4b.',
+    resolution_notes: 'Keys milled and handed over to site representative with delivery voucher.',
+    resolution_notes_ar: 'تم تجهيز المفاتيح وتسليمها لممثل العميل بموجب إذن استلام.',
     created_at: '2026-10-08T10:15:00Z',
     updated_at: '2026-10-10T12:00:00Z',
   },
 ]
 
+const TEAM_MEMBERS = [
+  { en: 'Eng. Ahmed Al-Mansoor', ar: 'م. أحمد المنصور' },
+  { en: 'Mohammed Salem', ar: 'محمد سالم' },
+  { en: 'Tariq Al-Harbi', ar: 'طارق الحربي' },
+  { en: 'Hassan Al-Otaibi', ar: 'حسن العتيبي' },
+  { en: 'Bilal Khan', ar: 'بلال خان' },
+]
+
 export default function HelpdeskPage() {
+  const { lang, isRtl } = useLanguage()
   const [tickets, setTickets] = useState<SupportTicket[]>(SEED_TICKETS)
   const [filterState, setFilterState] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
@@ -94,7 +124,9 @@ export default function HelpdeskPage() {
     return (
       t.ticket_number.toLowerCase().includes(q) ||
       t.subject.toLowerCase().includes(q) ||
+      (t.subject_ar && t.subject_ar.includes(q)) ||
       t.customer_name.toLowerCase().includes(q) ||
+      (t.customer_name_ar && t.customer_name_ar.includes(q)) ||
       (t.panel_serial_number && t.panel_serial_number.toLowerCase().includes(q))
     )
   })
@@ -107,17 +139,22 @@ export default function HelpdeskPage() {
 
   function handleCreateTicket(e: React.FormEvent) {
     e.preventDefault()
+    const member = TEAM_MEMBERS.find(m => m.en === form.assigned_to || m.ar === form.assigned_to)
     const newT: SupportTicket = {
       id: `t-${Date.now()}`,
       ticket_number: `HD-2026-0${80 + tickets.length + 2}`,
       subject: form.subject,
+      subject_ar: form.subject,
       customer_name: form.customer_name,
+      customer_name_ar: form.customer_name,
       project_reference: form.project_reference,
       panel_serial_number: form.panel_serial_number || 'SN-MS-GEN',
       priority: form.priority,
       state: 'new',
-      assigned_to: form.assigned_to,
+      assigned_to: member ? member.en : form.assigned_to,
+      assigned_to_ar: member ? member.ar : form.assigned_to,
       description: form.description,
+      description_ar: form.description,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -140,6 +177,7 @@ export default function HelpdeskPage() {
         ...t,
         state: newState,
         resolution_notes: notes || t.resolution_notes,
+        resolution_notes_ar: notes || t.resolution_notes_ar || t.resolution_notes,
         updated_at: new Date().toISOString()
       } : t))
     )
@@ -148,6 +186,7 @@ export default function HelpdeskPage() {
         ...prev,
         state: newState,
         resolution_notes: notes || prev.resolution_notes,
+        resolution_notes_ar: notes || prev.resolution_notes_ar || prev.resolution_notes,
         updated_at: new Date().toISOString()
       } : null)
     }
@@ -159,7 +198,7 @@ export default function HelpdeskPage() {
       titleAr="الدعم الفني وخدمات ما بعد البيع والضمان"
       actions={
         <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          + Open Support Ticket
+          {isRtl ? '+ فتح تذكرة دعم فني' : '+ Open Support Ticket'}
         </button>
       }
     >
@@ -168,33 +207,33 @@ export default function HelpdeskPage() {
         <div className="kpi-card accent">
           <div className="kpi-icon accent-bg">🎟️</div>
           <div className="kpi-value">{openTickets}</div>
-          <div className="kpi-label">Active Site Tickets</div>
+          <div className="kpi-label">{isRtl ? 'التذاكر الميدانية النشطة' : 'Active Site Tickets'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Pending investigation or site intervention
+            {isRtl ? 'قيد الفحص والمتابعة الميدانية' : 'Pending investigation or site visit'}
           </div>
         </div>
         <div className="kpi-card danger">
           <div className="kpi-icon danger-bg">⚠️</div>
           <div className="kpi-value">{criticalTickets}</div>
-          <div className="kpi-label">Critical Substation Issues</div>
+          <div className="kpi-label">{isRtl ? 'أعطال وفصولات حرجة بالمحطات' : 'Critical Substation Trips'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Substation trips or urgent energization blocks
+            {isRtl ? 'فصل قواطع رئيسية أو عطل تشغيل' : 'Immediate energization trip risk'}
           </div>
         </div>
         <div className="kpi-card success">
           <div className="kpi-icon success-bg">✅</div>
           <div className="kpi-value">{resolutionRate}%</div>
-          <div className="kpi-label">First-Time Resolution Rate</div>
+          <div className="kpi-label">{isRtl ? 'معدل الحل من الزيارة الأولى' : 'First-Visit Resolution'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            {resolvedTickets} tickets successfully closed
+            {resolvedTickets} {isRtl ? 'تذكرة تم إغلاقها بنجاح' : 'tickets successfully resolved'}
           </div>
         </div>
         <div className="kpi-card purple">
           <div className="kpi-icon purple-bg">🛡️</div>
-          <div className="kpi-value">24 Months</div>
-          <div className="kpi-label">Standard Factory Warranty</div>
+          <div className="kpi-value">24 {isRtl ? 'شهراً' : 'Months'}</div>
+          <div className="kpi-label">{isRtl ? 'ضمان المصنع المعتمد' : 'Factory Warranty'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Full coverage on busbars, wiring & switchgear
+            {isRtl ? 'تغطية شاملة للبسبار، القواطع، والأسلاك' : 'Full switchgear & busbar coverage'}
           </div>
         </div>
       </div>
@@ -203,14 +242,16 @@ export default function HelpdeskPage() {
       <div className="card" style={{ marginTop: 24, padding: '16px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>All Warranty & Support Cases</span>
-            <span className="badge badge-subtle">{filtered.length} tickets</span>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>
+              {isRtl ? 'سجل بلاغات الضمان والدعم الميداني' : 'All Warranty & Support Cases'}
+            </span>
+            <span className="badge badge-subtle">{filtered.length} {isRtl ? 'تذكرة' : 'tickets'}</span>
           </div>
 
           <div style={{ display: 'flex', gap: 12 }}>
             <input
               type="text"
-              placeholder="Search ticket #, subject, customer, S/N..."
+              placeholder={isRtl ? '...بحث بالرقم، العطل، العميل، السيريال' : 'Search ticket #, subject, customer, S/N...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input"
@@ -222,12 +263,12 @@ export default function HelpdeskPage() {
               className="input"
               style={{ width: 140 }}
             >
-              <option value="all">All States</option>
-              <option value="new">New</option>
-              <option value="in_progress">In Progress</option>
-              <option value="waiting">Waiting</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
+              <option value="all">{isRtl ? 'جميع الحالات' : 'All States'}</option>
+              <option value="new">{isRtl ? 'جديد' : 'New'}</option>
+              <option value="in_progress">{isRtl ? 'جاري المعالجة' : 'In Progress'}</option>
+              <option value="waiting">{isRtl ? 'في الانتظار' : 'Waiting'}</option>
+              <option value="resolved">{isRtl ? 'تم الحل' : 'Resolved'}</option>
+              <option value="closed">{isRtl ? 'مغلق' : 'Closed'}</option>
             </select>
             <select
               value={filterPriority}
@@ -235,11 +276,11 @@ export default function HelpdeskPage() {
               className="input"
               style={{ width: 140 }}
             >
-              <option value="all">All Priorities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
+              <option value="all">{isRtl ? 'جميع الأولويات' : 'All Priorities'}</option>
+              <option value="critical">{isRtl ? 'حرج' : 'Critical'}</option>
+              <option value="high">{isRtl ? 'عالي' : 'High'}</option>
+              <option value="medium">{isRtl ? 'متوسط' : 'Medium'}</option>
+              <option value="low">{isRtl ? 'منخفض' : 'Low'}</option>
             </select>
           </div>
         </div>
@@ -249,21 +290,25 @@ export default function HelpdeskPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Ticket ID</th>
-                <th>Priority</th>
-                <th>Subject & Switchgear Issue</th>
-                <th>Customer</th>
-                <th>Panel Serial #</th>
-                <th>Assigned To</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th>{isRtl ? 'رقم التذكرة' : 'TICKET ID'}</th>
+                <th>{isRtl ? 'الأولوية' : 'PRIORITY'}</th>
+                <th>{isRtl ? 'موضوع البلاغ والعطل الكهربائي' : 'SUBJECT & ISSUE'}</th>
+                <th>{isRtl ? 'العميل' : 'CUSTOMER'}</th>
+                <th>{isRtl ? 'الرقم التسلسلي للوحة (S/N)' : 'PANEL S/N'}</th>
+                <th>{isRtl ? 'الفني / المهندس المسؤول' : 'ASSIGNED TO'}</th>
+                <th>{isRtl ? 'الحالة' : 'STATUS'}</th>
+                <th>{isRtl ? 'تاريخ البلاغ' : 'CREATED'}</th>
+                <th>{isRtl ? 'الإجراءات' : 'ACTIONS'}</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(ticket => {
-                const prioInfo = TICKET_PRIORITY_LABELS[ticket.priority] || { en: ticket.priority, color: '#6b7280' }
-                const stateInfo = TICKET_STATE_LABELS[ticket.state] || { en: ticket.state, color: '#6b7280' }
+                const prioInfo = TICKET_PRIORITY_LABELS[ticket.priority] || { en: ticket.priority, ar: ticket.priority, color: '#6b7280' }
+                const stateInfo = TICKET_STATE_LABELS[ticket.state] || { en: ticket.state, ar: ticket.state, color: '#6b7280' }
+                const subjectText = isRtl && ticket.subject_ar ? ticket.subject_ar : ticket.subject
+                const customerText = isRtl && ticket.customer_name_ar ? ticket.customer_name_ar : ticket.customer_name
+                const assignedText = isRtl && ticket.assigned_to_ar ? ticket.assigned_to_ar : (ticket.assigned_to || (isRtl ? 'غير محدد' : 'Unassigned'))
+
                 return (
                   <tr key={ticket.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTicket(ticket)}>
                     <td>
@@ -278,22 +323,22 @@ export default function HelpdeskPage() {
                           border: `1px solid ${prioInfo.color}44`,
                         }}
                       >
-                        {prioInfo.en}
+                        {prioInfo[lang] || prioInfo.en}
                       </span>
                     </td>
                     <td style={{ maxWidth: 320 }}>
                       <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ticket.subject}
+                        {subjectText}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                        Project: {ticket.project_reference || 'N/A'}
+                        {isRtl ? 'المشروع:' : 'Project:'} {ticket.project_reference || 'N/A'}
                       </div>
                     </td>
-                    <td>{ticket.customer_name}</td>
+                    <td>{customerText}</td>
                     <td>
                       <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{ticket.panel_serial_number || '—'}</span>
                     </td>
-                    <td>{ticket.assigned_to || 'Unassigned'}</td>
+                    <td>{assignedText}</td>
                     <td>
                       <span
                         className="badge"
@@ -302,7 +347,7 @@ export default function HelpdeskPage() {
                           color: stateInfo.color,
                         }}
                       >
-                        {stateInfo.en}
+                        {stateInfo[lang] || stateInfo.en}
                       </span>
                     </td>
                     <td>{formatDate(ticket.created_at)}</td>
@@ -311,29 +356,22 @@ export default function HelpdeskPage() {
                         {ticket.state !== 'resolved' && ticket.state !== 'closed' && (
                           <button
                             className="btn btn-sm btn-success"
-                            onClick={() => handleUpdateState(ticket.id, 'resolved', 'Resolved on site by field engineer')}
+                            onClick={() => handleUpdateState(ticket.id, 'resolved', isRtl ? 'تمت المعالجة في الموقع بواسطة مهندس الصيانة' : 'Resolved on site by field engineer')}
                           >
-                            Resolve
+                            {isRtl ? 'إغلاق البلاغ' : 'Resolve'}
                           </button>
                         )}
                         <button
                           className="btn btn-sm btn-secondary"
                           onClick={() => setSelectedTicket(ticket)}
                         >
-                          View
+                          {isRtl ? 'عرض' : 'View'}
                         </button>
                       </div>
                     </td>
                   </tr>
                 )
               })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>
-                    No support tickets match your search filters.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -345,9 +383,11 @@ export default function HelpdeskPage() {
           <div className="modal-content" style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 18 }}>{selectedTicket.ticket_number} — {selectedTicket.subject}</h3>
+                <h3 style={{ fontSize: 18 }}>
+                  {selectedTicket.ticket_number} — {isRtl && selectedTicket.subject_ar ? selectedTicket.subject_ar : selectedTicket.subject}
+                </h3>
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Customer: {selectedTicket.customer_name} | Serial: {selectedTicket.panel_serial_number}
+                  {isRtl ? 'العميل:' : 'Customer:'} {isRtl && selectedTicket.customer_name_ar ? selectedTicket.customer_name_ar : selectedTicket.customer_name} | {isRtl ? 'الرقم التسلسلي:' : 'S/N:'} {selectedTicket.panel_serial_number}
                 </span>
               </div>
               <button className="btn btn-secondary" onClick={() => setSelectedTicket(null)}>✕</button>
@@ -362,7 +402,7 @@ export default function HelpdeskPage() {
                     color: TICKET_PRIORITY_LABELS[selectedTicket.priority]?.color,
                   }}
                 >
-                  Priority: {TICKET_PRIORITY_LABELS[selectedTicket.priority]?.en}
+                  {isRtl ? 'الأولوية:' : 'Priority:'} {TICKET_PRIORITY_LABELS[selectedTicket.priority]?.[lang] || selectedTicket.priority}
                 </span>
                 <span
                   className="badge"
@@ -371,36 +411,38 @@ export default function HelpdeskPage() {
                     color: TICKET_STATE_LABELS[selectedTicket.state]?.color,
                   }}
                 >
-                  Status: {TICKET_STATE_LABELS[selectedTicket.state]?.en}
+                  {isRtl ? 'الحالة:' : 'Status:'} {TICKET_STATE_LABELS[selectedTicket.state]?.[lang] || selectedTicket.state}
                 </span>
                 <span className="badge badge-subtle">
-                  Assigned: {selectedTicket.assigned_to || 'None'}
+                  {isRtl ? 'المكلف:' : 'Assigned:'} {isRtl && selectedTicket.assigned_to_ar ? selectedTicket.assigned_to_ar : (selectedTicket.assigned_to || (isRtl ? 'غير محدد' : 'None'))}
                 </span>
               </div>
 
               <div>
-                <label className="label">Issue Description</label>
+                <label className="label">{isRtl ? 'وصف العطل والأعراض الميدانية' : 'Issue Description'}</label>
                 <div style={{ padding: 14, background: 'var(--bg-surface)', borderRadius: 8, fontSize: 14 }}>
-                  {selectedTicket.description}
+                  {isRtl && selectedTicket.description_ar ? selectedTicket.description_ar : selectedTicket.description}
                 </div>
               </div>
 
               <div>
-                <label className="label">Action Plan & Resolution History</label>
+                <label className="label">{isRtl ? 'خطة العمل وسجل المعالجة' : 'Action Plan & Resolution History'}</label>
                 <div style={{ padding: 14, background: 'var(--bg-surface)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {selectedTicket.resolution_notes || 'No resolution notes documented yet.'}
+                  {isRtl
+                    ? (selectedTicket.resolution_notes_ar || selectedTicket.resolution_notes || 'لا توجد ملاحظات حل حتى الآن.')
+                    : (selectedTicket.resolution_notes || 'No resolution notes documented yet.')}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Change Ticket State:</span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{isRtl ? 'تغيير حالة التذكرة:' : 'Change Ticket State:'}</span>
                 {(['new', 'in_progress', 'waiting', 'resolved', 'closed'] as TicketState[]).map(st => (
                   <button
                     key={st}
                     className={`btn btn-sm ${selectedTicket.state === st ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => handleUpdateState(selectedTicket.id, st)}
                   >
-                    {TICKET_STATE_LABELS[st]?.en || st}
+                    {TICKET_STATE_LABELS[st]?.[lang] || st}
                   </button>
                 ))}
               </div>
@@ -408,14 +450,14 @@ export default function HelpdeskPage() {
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelectedTicket(null)}>
-                Close
+                {isRtl ? 'إغلاق' : 'Close'}
               </button>
               {selectedTicket.state !== 'resolved' && (
                 <button
                   className="btn btn-success"
-                  onClick={() => handleUpdateState(selectedTicket.id, 'resolved', 'Case closed and client acknowledged resolution')}
+                  onClick={() => handleUpdateState(selectedTicket.id, 'resolved', isRtl ? 'تم حل البلاغ وتوقيع استلام العميل' : 'Case resolved and acknowledged by client')}
                 >
-                  ✓ Mark As Resolved
+                  ✓ {isRtl ? 'تأكيد الحل والإغلاق' : 'Mark As Resolved'}
                 </button>
               )}
             </div>
@@ -429,18 +471,18 @@ export default function HelpdeskPage() {
           <div className="modal-content" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleCreateTicket}>
               <div className="modal-header">
-                <h3>Open After-Sales / Warranty Ticket</h3>
+                <h3>{isRtl ? 'فتح تذكرة دعم فني / ضمان ميداني' : 'Open Warranty Support Ticket'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>✕</button>
               </div>
 
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
                 <div>
-                  <label className="label">Issue Subject</label>
+                  <label className="label">{isRtl ? 'موضوع البلاغ / العطل' : 'Issue Subject'}</label>
                   <input
                     required
                     type="text"
                     className="input"
-                    placeholder="e.g. Capacitor bank regulator hunting alarm"
+                    placeholder={isRtl ? 'مثال: إنذار فصل قاطع الدخول الرئيسي 2500 أمبير' : 'e.g. Capacitor bank regulator hunting alarm'}
                     value={form.subject}
                     onChange={e => setForm({ ...form, subject: e.target.value })}
                   />
@@ -448,22 +490,22 @@ export default function HelpdeskPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">Customer Name</label>
+                    <label className="label">{isRtl ? 'اسم العميل' : 'Customer Name'}</label>
                     <input
                       required
                       type="text"
                       className="input"
-                      placeholder="e.g. Saudi Electricity Co."
+                      placeholder={isRtl ? 'الشركة السعودية للكهرباء' : 'Saudi Electricity Co.'}
                       value={form.customer_name}
                       onChange={e => setForm({ ...form, customer_name: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="label">Panel Serial Number (S/N)</label>
+                    <label className="label">{isRtl ? 'الرقم التسلسلي للوحة (S/N)' : 'Panel Serial Number (S/N)'}</label>
                     <input
                       type="text"
                       className="input"
-                      placeholder="e.g. SN-MS-2026-0045"
+                      placeholder="SN-MS-2026-0045"
                       value={form.panel_serial_number}
                       onChange={e => setForm({ ...form, panel_serial_number: e.target.value })}
                     />
@@ -472,36 +514,41 @@ export default function HelpdeskPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">Priority Level</label>
+                    <label className="label">{isRtl ? 'مستوى الأولوية' : 'Priority Level'}</label>
                     <select
                       className="input"
                       value={form.priority}
                       onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })}
                     >
-                      <option value="low">Low (General inquiry)</option>
-                      <option value="medium">Medium (Component inspection)</option>
-                      <option value="high">High (Factory shutdown risk)</option>
-                      <option value="critical">Critical (Energization trip / fire risk)</option>
+                      <option value="low">{isRtl ? 'منخفض (استفسار عام)' : 'Low (General inquiry)'}</option>
+                      <option value="medium">{isRtl ? 'متوسط (معاينة دورية)' : 'Medium (Component inspection)'}</option>
+                      <option value="high">{isRtl ? 'عالي (خطر توقف خط إنتاج)' : 'High (Shutdown risk)'}</option>
+                      <option value="critical">{isRtl ? 'حرج (فصل قاطع رئيسي بالمحطة)' : 'Critical (Substation trip)'}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="label">Assigned Field Engineer / Tech</label>
-                    <input
-                      type="text"
+                    <label className="label">{isRtl ? 'المهندس / الفني المكلف' : 'Assigned Field Engineer'}</label>
+                    <select
                       className="input"
                       value={form.assigned_to}
                       onChange={e => setForm({ ...form, assigned_to: e.target.value })}
-                    />
+                    >
+                      {TEAM_MEMBERS.map(m => (
+                        <option key={m.en} value={m.en}>
+                          {isRtl ? m.ar : m.en}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="label">Detailed Defect / Symptom Description</label>
+                  <label className="label">{isRtl ? 'وصف العطل والأعراض الميدانية' : 'Detailed Defect Description'}</label>
                   <textarea
                     required
                     rows={4}
                     className="input"
-                    placeholder="Explain the electrical symptoms, breaker status, error codes displayed on protection relays..."
+                    placeholder={isRtl ? 'اذكر الأعراض، أكواد الأخطاء على شاشة الحماية، وقت حدوث العطل...' : 'Explain the electrical symptoms, breaker status, error codes...'}
                     value={form.description}
                     onChange={e => setForm({ ...form, description: e.target.value })}
                   />
@@ -510,10 +557,10 @@ export default function HelpdeskPage() {
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>
-                  Cancel
+                  {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Submit Support Ticket
+                  {isRtl ? 'إرسال التذكرة' : 'Submit Ticket'}
                 </button>
               </div>
             </form>

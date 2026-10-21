@@ -1,0 +1,4 @@
+{
+  "deps": "@supabase/supabase-js @supabase/ssr next-intl recharts lucide-react date-fns",
+  "devDeps": ""
+}

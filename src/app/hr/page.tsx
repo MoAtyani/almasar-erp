@@ -4,6 +4,7 @@ import AppLayout from '@/components/AppLayout'
 import { createClient } from '@/lib/supabase/client'
 import { Employee, Payslip } from '@/lib/types'
 import { ROLE_LABELS, formatCurrency, formatDate } from '@/lib/constants'
+import { useLanguage } from '@/context/LanguageContext'
 
 const SEED_EMPLOYEES: Employee[] = [
   {
@@ -91,12 +92,12 @@ const SEED_PAYSLIPS: Payslip[] = [
     employee_name: 'Mohammed Salem (محمد سالم)',
     month: 'October 2026',
     basic_salary: 2200,
-    points_bonus: 640 * 1.5, // $960 bonus from 640 earned factory points
-    allowances: 300,
-    deductions: 50,
-    net_salary: 2200 + 960 + 300 - 50,
+    points_bonus: 960, // 640 points * 1.50
+    allowances: 350,
+    deductions: 0,
+    net_salary: 3510,
     status: 'approved',
-    payment_date: '2026-10-30',
+    payment_date: '2026-10-25',
   },
   {
     id: 'ps-2',
@@ -105,78 +106,97 @@ const SEED_PAYSLIPS: Payslip[] = [
     employee_name: 'Bilal Khan (بلال خان)',
     month: 'October 2026',
     basic_salary: 2100,
-    points_bonus: 590 * 1.5,
-    allowances: 250,
+    points_bonus: 885, // 590 points * 1.50
+    allowances: 300,
     deductions: 0,
-    net_salary: 2100 + 885 + 250,
+    net_salary: 3285,
     status: 'draft',
   },
 ]
 
-export default function HrPayrollPage() {
+export default function HRPage() {
   const supabase = createClient()
+  const { lang, isRtl } = useLanguage()
   const [employees, setEmployees] = useState<Employee[]>(SEED_EMPLOYEES)
   const [payslips, setPayslips] = useState<Payslip[]>(SEED_PAYSLIPS)
   const [activeTab, setActiveTab] = useState<'employees' | 'payroll' | 'points'>('employees')
   const [search, setSearch] = useState('')
-  const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null)
   const [showAddEmpModal, setShowAddEmpModal] = useState(false)
   const [showRunPayrollModal, setShowRunPayrollModal] = useState(false)
+  const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null)
 
-  // New Employee Form
+  // Payroll run config
+  const [payrollMonth, setPayrollMonth] = useState('October 2026')
+  const [pointConversionRate, setPointConversionRate] = useState(1.50) // $1.50 per point
+
+  // Add Employee Form State
   const [empForm, setEmpForm] = useState({
     full_name: '',
     full_name_ar: '',
-    employee_id: '',
     department: 'Panel Fabrication',
-    role: 'technician' as const,
+    role: 'technician',
     email: '',
     phone: '',
     basic_salary: 2200,
     bank_account: '',
   })
 
-  // Payroll Run Form
-  const [payrollMonth, setPayrollMonth] = useState('October 2026')
-  const [pointConversionRate, setPointConversionRate] = useState(1.5) // $1.5 per point
+  useEffect(() => {
+    loadHRData()
+  }, [])
 
-  const totalMonthlyPayroll = payslips.reduce((s, p) => s + p.net_salary, 0)
-  const totalPointsAwarded = employees.reduce((s, e) => s + e.reward_points, 0)
+  async function loadHRData() {
+    try {
+      const { data: emps } = await supabase.from('employees').select('*').order('employee_id')
+      if (emps && emps.length > 0) setEmployees(emps as Employee[])
+    } catch {
+      // offline fallback
+    }
+  }
+
+  const totalMonthlyPayroll = employees.reduce((s, e) => s + (e.basic_salary || 0), 0) +
+    employees.reduce((s, e) => s + ((e.reward_points || 0) * pointConversionRate), 0)
+
+  const totalPointsAwarded = employees.reduce((s, e) => s + (e.reward_points || 0), 0)
 
   const filteredEmployees = employees.filter(e => {
     if (!search) return true
     const q = search.toLowerCase()
     return (
       e.full_name.toLowerCase().includes(q) ||
-      e.full_name_ar.includes(q) ||
+      (e.full_name_ar && e.full_name_ar.includes(q)) ||
       e.employee_id.toLowerCase().includes(q) ||
       e.department.toLowerCase().includes(q)
     )
   })
 
-  function handleAddEmployee(e: React.FormEvent) {
+  async function handleAddEmployee(e: React.FormEvent) {
     e.preventDefault()
     const newEmp: Employee = {
       id: `emp-${Date.now()}`,
-      employee_id: empForm.employee_id || `MS-${100 + employees.length + 1}`,
+      employee_id: `MS-${100 + employees.length + 1}`,
       full_name: empForm.full_name,
       full_name_ar: empForm.full_name_ar,
       department: empForm.department,
-      role: empForm.role,
-      email: empForm.email,
+      role: empForm.role as any,
+      email: empForm.email || `emp${employees.length + 1}@almasar-switchgear.com`,
       phone: empForm.phone,
       hire_date: new Date().toISOString().split('T')[0],
-      basic_salary: Number(empForm.basic_salary),
+      basic_salary: empForm.basic_salary,
       reward_points: 0,
-      bank_account: empForm.bank_account,
+      bank_account: empForm.bank_account || 'SA44 0000 0000 0000 0000 0000',
       status: 'active',
     }
+
+    try {
+      await supabase.from('employees').insert(newEmp)
+    } catch {}
+
     setEmployees([...employees, newEmp])
     setShowAddEmpModal(false)
     setEmpForm({
       full_name: '',
       full_name_ar: '',
-      employee_id: '',
       department: 'Panel Fabrication',
       role: 'technician',
       email: '',
@@ -196,7 +216,7 @@ export default function HrPayrollPage() {
         id: `ps-${Date.now()}-${idx}`,
         reference: `PAY/${payrollMonth.replace(' ', '-')}/${idx + 1 < 10 ? '0' : ''}${idx + 1}`,
         employee_id: emp.id,
-        employee_name: `${emp.full_name} (${emp.full_name_ar})`,
+        employee_name: isRtl ? (emp.full_name_ar || emp.full_name) : emp.full_name,
         month: payrollMonth,
         basic_salary: emp.basic_salary,
         points_bonus: bonus,
@@ -220,6 +240,14 @@ export default function HrPayrollPage() {
     }
   }
 
+  const deptTranslations: Record<string, string> = {
+    'Panel Fabrication': 'تجميع وهياكل اللوحات',
+    'Busbar & Wiring': 'تشكيل البسبار والأسلاك',
+    'Quality Assurance': 'ضبط الجودة وفحص FAT',
+    'Engineering & Estimation': 'الهندسة والتسعير الفني',
+    'Production Management': 'إدارة وتخطيط الإنتاج',
+  }
+
   return (
     <AppLayout
       title="HR & Payroll Management"
@@ -227,10 +255,10 @@ export default function HrPayrollPage() {
       actions={
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-secondary" onClick={() => setShowRunPayrollModal(true)}>
-            ⚡ Run Monthly Payroll
+            ⚡ {isRtl ? 'تشغيل مسير الرواتب الشهري' : 'Run Monthly Payroll'}
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddEmpModal(true)}>
-            + Add Employee
+            {isRtl ? '+ إضافة موظف / فني جديد' : '+ Add Employee'}
           </button>
         </div>
       }
@@ -240,33 +268,33 @@ export default function HrPayrollPage() {
         <div className="kpi-card accent">
           <div className="kpi-icon accent-bg">👥</div>
           <div className="kpi-value">{employees.length}</div>
-          <div className="kpi-label">Active Factory Personnel</div>
+          <div className="kpi-label">{isRtl ? 'إجمالي كادر المصنع النشط' : 'Active Factory Personnel'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Engineers, supervisors & panel technicians
+            {isRtl ? 'مهندسون ومشرفون وفنيو لوحات كهربائية' : 'Engineers, supervisors & panel technicians'}
           </div>
         </div>
         <div className="kpi-card success">
           <div className="kpi-icon success-bg">⭐</div>
-          <div className="kpi-value">{totalPointsAwarded} pts</div>
-          <div className="kpi-label">Technician Reward Points</div>
+          <div className="kpi-value">{totalPointsAwarded} {isRtl ? 'نقطة' : 'pts'}</div>
+          <div className="kpi-label">{isRtl ? 'نقاط الجودة المكتسبة للفنيين' : 'Technician Reward Points'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Awarded for rapid assembly & zero QC defects
+            {isRtl ? 'ممنوحة لسرعة التجميع وانعدام الملاحظات في فحص QC' : 'Awarded for rapid assembly & zero QC defects'}
           </div>
         </div>
         <div className="kpi-card purple">
           <div className="kpi-icon purple-bg">💵</div>
           <div className="kpi-value">{formatCurrency(totalMonthlyPayroll)}</div>
-          <div className="kpi-label">Current Payroll Commitment</div>
+          <div className="kpi-label">{isRtl ? 'إجمالي مسير الرواتب والمكافآت' : 'Current Payroll Commitment'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Base salaries + technician performance bonuses
+            {isRtl ? 'الرواتب الأساسية + حوافز النقاط المعتمدة' : 'Base salaries + technician performance bonuses'}
           </div>
         </div>
         <div className="kpi-card warning">
           <div className="kpi-icon warning-bg">🏆</div>
-          <div className="kpi-value">$1.50 / pt</div>
-          <div className="kpi-label">Point Incentive Rate</div>
+          <div className="kpi-value">$1.50 / {isRtl ? 'نقطة' : 'pt'}</div>
+          <div className="kpi-label">{isRtl ? 'سعر صرف نقاط الحافز المالي' : 'Point Incentive Rate'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Direct conversion rate to monthly bonus pay
+            {isRtl ? 'التحويل المباشر لنقاط الفنيين إلى مكافأة نقدية بالراتب' : 'Direct conversion rate to monthly bonus pay'}
           </div>
         </div>
       </div>
@@ -279,26 +307,26 @@ export default function HrPayrollPage() {
               className={`btn ${activeTab === 'employees' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveTab('employees')}
             >
-              👷 Employee Directory ({employees.length})
+              👷 {isRtl ? `دليل العاملين والفنيين (${employees.length})` : `Employee Directory (${employees.length})`}
             </button>
             <button
               className={`btn ${activeTab === 'payroll' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveTab('payroll')}
             >
-              📜 Payroll & Payslips ({payslips.length})
+              📜 {isRtl ? `مسير الرواتب وقسائم الصرف (${payslips.length})` : `Payroll & Payslips (${payslips.length})`}
             </button>
             <button
               className={`btn ${activeTab === 'points' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveTab('points')}
             >
-              🌟 Technician Points Leaderboard
+              🌟 {isRtl ? 'لوحة شرف وتنافس الفنيين' : 'Technician Points Leaderboard'}
             </button>
           </div>
 
           {activeTab === 'employees' && (
             <input
               type="text"
-              placeholder="Search employee by name, ID or role..."
+              placeholder={isRtl ? '...بحث بالاسم، الرقم الوظيفي، أو القسم' : 'Search employee by name, ID or role...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input"
@@ -313,13 +341,13 @@ export default function HrPayrollPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Badge ID</th>
-                  <th>Full Name (English / Arabic)</th>
-                  <th>Department</th>
-                  <th>Role</th>
-                  <th>Basic Salary</th>
-                  <th>Earned Points</th>
-                  <th>Status</th>
+                  <th>{isRtl ? 'الرقم الوظيفي' : 'Badge ID'}</th>
+                  <th>{isRtl ? 'الاسم' : 'Full Name'}</th>
+                  <th>{isRtl ? 'القسم' : 'Department'}</th>
+                  <th>{isRtl ? 'الدور الوظيفي' : 'Role'}</th>
+                  <th>{isRtl ? 'الراتب الأساسي' : 'Basic Salary'}</th>
+                  <th>{isRtl ? 'النقاط المكتسبة' : 'Earned Points'}</th>
+                  <th>{isRtl ? 'الحالة' : 'Status'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -329,24 +357,26 @@ export default function HrPayrollPage() {
                       <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{emp.employee_id}</span>
                     </td>
                     <td>
-                      <div><strong>{emp.full_name}</strong></div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{emp.full_name_ar}</div>
+                      <div><strong>{isRtl ? (emp.full_name_ar || emp.full_name) : emp.full_name}</strong></div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {isRtl ? emp.full_name : emp.full_name_ar}
+                      </div>
                     </td>
-                    <td>{emp.department}</td>
+                    <td>{isRtl ? (deptTranslations[emp.department] || emp.department) : emp.department}</td>
                     <td>
                       <span className="badge badge-subtle">
-                        {ROLE_LABELS[emp.role]?.en || emp.role}
+                        {ROLE_LABELS[emp.role]?.[lang] || emp.role}
                       </span>
                     </td>
                     <td>{formatCurrency(emp.basic_salary)}</td>
                     <td>
                       <span style={{ color: '#f59e0b', fontWeight: 700 }}>
-                        ⭐ {emp.reward_points} pts
+                        ⭐ {emp.reward_points} {isRtl ? 'نقطة' : 'pts'}
                       </span>
                     </td>
                     <td>
                       <span className="badge" style={{ backgroundColor: '#22c55e22', color: '#22c55e' }}>
-                        Active
+                        {isRtl ? 'على رأس العمل' : 'Active'}
                       </span>
                     </td>
                   </tr>
@@ -362,15 +392,15 @@ export default function HrPayrollPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Slip Ref</th>
-                  <th>Employee</th>
-                  <th>Payroll Month</th>
-                  <th>Basic Salary</th>
-                  <th>Points Bonus</th>
-                  <th>Allowances</th>
-                  <th>Net Payout</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>{isRtl ? 'رقم الإيصال' : 'Slip Ref'}</th>
+                  <th>{isRtl ? 'الموظف / الفني' : 'Employee'}</th>
+                  <th>{isRtl ? 'الشهر' : 'Payroll Month'}</th>
+                  <th>{isRtl ? 'الراتب الأساسي' : 'Basic Salary'}</th>
+                  <th>{isRtl ? 'مكافأة نقاط الجودة' : 'Points Bonus'}</th>
+                  <th>{isRtl ? 'البدلات' : 'Allowances'}</th>
+                  <th>{isRtl ? 'صافي المستحق' : 'Net Payout'}</th>
+                  <th>{isRtl ? 'الحالة' : 'Status'}</th>
+                  <th>{isRtl ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -391,7 +421,7 @@ export default function HrPayrollPage() {
                           color: slip.status === 'approved' ? '#22c55e' : '#f59e0b',
                         }}
                       >
-                        {slip.status.toUpperCase()}
+                        {slip.status === 'approved' ? (isRtl ? 'معتمد' : 'APPROVED') : (isRtl ? 'مسودة' : 'DRAFT')}
                       </span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
@@ -401,14 +431,14 @@ export default function HrPayrollPage() {
                             className="btn btn-sm btn-success"
                             onClick={() => handleApprovePayslip(slip.id)}
                           >
-                            Approve
+                            {isRtl ? 'اعتماد' : 'Approve'}
                           </button>
                         )}
                         <button
                           className="btn btn-sm btn-secondary"
                           onClick={() => setSelectedPayslip(slip)}
                         >
-                          View Slip
+                          {isRtl ? 'عرض القسيمة' : 'View Slip'}
                         </button>
                       </div>
                     </td>
@@ -423,7 +453,9 @@ export default function HrPayrollPage() {
         {activeTab === 'points' && (
           <div style={{ marginTop: 16 }}>
             <div style={{ padding: '12px 16px', background: 'var(--bg-surface)', borderRadius: 8, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
-              ⚡ <strong>Technician Reward System:</strong> Points are earned upon completing electrical assembly stages (Sheet Metal, Layout, Power Busbars, Control Wiring) with zero defects during initial QC inspection. Points translate into monthly cash bonuses.
+              ⚡ <strong>{isRtl ? 'نظام تحفيز ومكافآت الفنيين:' : 'Technician Reward System:'}</strong> {isRtl
+                ? 'تُمنح النقاط عند إنجاز مراحل التجميع الكهربائي (تصنيع الصاج، تركيب القواطع، تشكيل البسبار النحاسي، تمديد الأسلاك) بدون ملاحظات إعادة تصنيع في فحص الجودة الأولي. تُصرف النقاط شهرياً كحافز نقدي في مسير الرواتب.'
+                : 'Points are earned upon completing electrical assembly stages (Sheet Metal, Layout, Power Busbars, Control Wiring) with zero defects during initial QC inspection. Points translate into monthly cash bonuses.'}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
               {employees
@@ -442,16 +474,18 @@ export default function HrPayrollPage() {
                           #{rank + 1}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 700 }}>{tech.full_name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{tech.full_name_ar}</div>
+                          <div style={{ fontWeight: 700 }}>{isRtl ? (tech.full_name_ar || tech.full_name) : tech.full_name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            {isRtl ? tech.full_name : tech.full_name_ar}
+                          </div>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
+                      <div style={{ textAlign: isRtl ? 'left' : 'right' }}>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#f59e0b' }}>
                           ⭐ {tech.reward_points}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                          ≈ {formatCurrency(tech.reward_points * 1.5)} bonus
+                          ≈ {formatCurrency(tech.reward_points * 1.5)} {isRtl ? 'حافز نقدي' : 'bonus'}
                         </div>
                       </div>
                     </div>
@@ -468,9 +502,9 @@ export default function HrPayrollPage() {
           <div className="modal-content" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 18 }}>Official Salary Statement</h3>
+                <h3 style={{ fontSize: 18 }}>{isRtl ? 'بيان قسيمة الراتب والمكافأة الرسمية' : 'Official Salary Statement'}</h3>
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Al-Masar Switchgear Factory Co. — {selectedPayslip.reference}
+                  {isRtl ? 'شركة مصنع المسار للوحات الكهربائية' : 'Al-Masar Switchgear Factory Co.'} — {selectedPayslip.reference}
                 </span>
               </div>
               <button className="btn btn-secondary" onClick={() => setSelectedPayslip(null)}>✕</button>
@@ -478,32 +512,32 @@ export default function HrPayrollPage() {
 
             <div style={{ padding: 24 }}>
               <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Employee:</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isRtl ? 'اسم الموظف / الفني:' : 'Employee:'}</div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{selectedPayslip.employee_name}</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Period: {selectedPayslip.month}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{isRtl ? 'فترة الصرف:' : 'Period:'} {selectedPayslip.month}</div>
               </div>
 
               <div style={{ display: 'grid', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Basic Salary:</span>
+                  <span>{isRtl ? 'الراتب الأساسي:' : 'Basic Salary:'}</span>
                   <span style={{ fontWeight: 600 }}>{formatCurrency(selectedPayslip.basic_salary)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#f59e0b' }}>
-                  <span>Technician Performance Bonus (Points):</span>
+                  <span>{isRtl ? 'مكافأة نقاط التجميع والجودة:' : 'Technician Performance Bonus (Points):'}</span>
                   <span style={{ fontWeight: 600 }}>+{formatCurrency(selectedPayslip.points_bonus)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Housing & Transport Allowances:</span>
+                  <span>{isRtl ? 'بدلات السكن والانتقال:' : 'Housing & Transport Allowances:'}</span>
                   <span style={{ fontWeight: 600 }}>+{formatCurrency(selectedPayslip.allowances)}</span>
                 </div>
                 {selectedPayslip.deductions > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--danger)' }}>
-                    <span>Deductions:</span>
+                    <span>{isRtl ? 'الاستقطاعات:' : 'Deductions:'}</span>
                     <span style={{ fontWeight: 600 }}>-{formatCurrency(selectedPayslip.deductions)}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border)', paddingTop: 12, fontSize: 18, fontWeight: 800 }}>
-                  <span>Net Salary Credited:</span>
+                  <span>{isRtl ? 'صافي الراتب المستحق للإيداع:' : 'Net Salary Credited:'}</span>
                   <span style={{ color: 'var(--success)' }}>{formatCurrency(selectedPayslip.net_salary)}</span>
                 </div>
               </div>
@@ -511,11 +545,11 @@ export default function HrPayrollPage() {
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => window.print()}>
-                🖨️ Print Payslip
+                🖨️ {isRtl ? 'طباعة القسيمة' : 'Print Payslip'}
               </button>
               {selectedPayslip.status === 'draft' && (
                 <button className="btn btn-success" onClick={() => handleApprovePayslip(selectedPayslip.id)}>
-                  ✓ Approve & Dispatch
+                  ✓ {isRtl ? 'اعتماد وإرسال للبنك' : 'Approve & Dispatch'}
                 </button>
               )}
             </div>
@@ -529,14 +563,14 @@ export default function HrPayrollPage() {
           <div className="modal-content" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleAddEmployee}>
               <div className="modal-header">
-                <h3>Add New Factory Personnel</h3>
+                <h3>{isRtl ? 'إضافة موظف / فني لكادر المصنع' : 'Add New Factory Personnel'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddEmpModal(false)}>✕</button>
               </div>
 
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">Full Name (English)</label>
+                    <label className="label">{isRtl ? 'الاسم بالإنجليزية' : 'Full Name (English)'}</label>
                     <input
                       required
                       type="text"
@@ -547,12 +581,12 @@ export default function HrPayrollPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">Full Name (Arabic)</label>
+                    <label className="label">{isRtl ? 'الاسم بالعربية' : 'Full Name (Arabic)'}</label>
                     <input
                       required
                       type="text"
                       className="input"
-                      placeholder="e.g. سامي الغامدي"
+                      placeholder="مثال: سامي الغامدي"
                       value={empForm.full_name_ar}
                       onChange={e => setEmpForm({ ...empForm, full_name_ar: e.target.value })}
                     />
@@ -561,38 +595,38 @@ export default function HrPayrollPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">Department</label>
+                    <label className="label">{isRtl ? 'القسم' : 'Department'}</label>
                     <select
                       className="input"
                       value={empForm.department}
                       onChange={e => setEmpForm({ ...empForm, department: e.target.value })}
                     >
-                      <option value="Panel Fabrication">Panel Fabrication (تجميع اللوحات)</option>
-                      <option value="Busbar & Wiring">Busbar & Wiring (البسبار والأسلاك)</option>
-                      <option value="Quality Assurance">Quality Assurance (ضبط الجودة)</option>
-                      <option value="Engineering & Estimation">Engineering & Estimation (الهندسة)</option>
-                      <option value="Production Management">Production Management (إدارة الإنتاج)</option>
+                      <option value="Panel Fabrication">{isRtl ? 'تجميع وهياكل اللوحات' : 'Panel Fabrication'}</option>
+                      <option value="Busbar & Wiring">{isRtl ? 'تشكيل البسبار والأسلاك' : 'Busbar & Wiring'}</option>
+                      <option value="Quality Assurance">{isRtl ? 'ضبط الجودة وفحص FAT' : 'Quality Assurance'}</option>
+                      <option value="Engineering & Estimation">{isRtl ? 'الهندسة والتسعير الفني' : 'Engineering & Estimation'}</option>
+                      <option value="Production Management">{isRtl ? 'إدارة وتخطيط الإنتاج' : 'Production Management'}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="label">Role</label>
+                    <label className="label">{isRtl ? 'المسمى الوظيفي' : 'Role'}</label>
                     <select
                       className="input"
                       value={empForm.role}
                       onChange={e => setEmpForm({ ...empForm, role: e.target.value as any })}
                     >
-                      <option value="technician">Technician (فني)</option>
-                      <option value="qc_technician">QC Technician (فني جودة)</option>
-                      <option value="design_engineer">Design Engineer (مهندس تصميم)</option>
-                      <option value="production_supervisor">Production Supervisor (مشرف إنتاج)</option>
-                      <option value="sales">Sales (مبيعات)</option>
+                      <option value="technician">{isRtl ? 'فني تجميع' : 'Technician'}</option>
+                      <option value="qc_technician">{isRtl ? 'فني ضبط جودة' : 'QC Technician'}</option>
+                      <option value="design_engineer">{isRtl ? 'مهندس تصميم وتفريد' : 'Design Engineer'}</option>
+                      <option value="production_supervisor">{isRtl ? 'مشرف إنتاج' : 'Production Supervisor'}</option>
+                      <option value="sales">{isRtl ? 'مسؤول مبيعات' : 'Sales'}</option>
                     </select>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">Basic Salary ($)</label>
+                    <label className="label">{isRtl ? 'الراتب الأساسي ($)' : 'Basic Salary ($)'}</label>
                     <input
                       required
                       type="number"
@@ -602,7 +636,7 @@ export default function HrPayrollPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">Phone Number</label>
+                    <label className="label">{isRtl ? 'رقم الهاتف' : 'Phone Number'}</label>
                     <input
                       type="text"
                       className="input"
@@ -614,7 +648,7 @@ export default function HrPayrollPage() {
                 </div>
 
                 <div>
-                  <label className="label">Email Address</label>
+                  <label className="label">{isRtl ? 'البريد الإلكتروني' : 'Email Address'}</label>
                   <input
                     type="email"
                     className="input"
@@ -627,10 +661,10 @@ export default function HrPayrollPage() {
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddEmpModal(false)}>
-                  Cancel
+                  {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Save Employee
+                  {isRtl ? 'حفظ الموظف' : 'Save Employee'}
                 </button>
               </div>
             </form>
@@ -643,13 +677,13 @@ export default function HrPayrollPage() {
         <div className="modal-backdrop" onClick={() => setShowRunPayrollModal(false)}>
           <div className="modal-content" style={{ maxWidth: 450 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Generate Monthly Payroll Batch</h3>
+              <h3>{isRtl ? 'تشغيل دفعة مسير الرواتب الشهرية' : 'Generate Monthly Payroll Batch'}</h3>
               <button className="btn btn-secondary" onClick={() => setShowRunPayrollModal(false)}>✕</button>
             </div>
 
             <div style={{ padding: 20, display: 'grid', gap: 14 }}>
               <div>
-                <label className="label">Payroll Month</label>
+                <label className="label">{isRtl ? 'شهر الاستحقاق' : 'Payroll Month'}</label>
                 <input
                   type="text"
                   className="input"
@@ -658,7 +692,7 @@ export default function HrPayrollPage() {
                 />
               </div>
               <div>
-                <label className="label">Reward Point Payout Rate ($ / point)</label>
+                <label className="label">{isRtl ? 'سعر احتساب نقطة الجودة ($ / نقطة)' : 'Reward Point Payout Rate ($ / point)'}</label>
                 <input
                   type="number"
                   step="0.1"
@@ -668,13 +702,19 @@ export default function HrPayrollPage() {
                 />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                This will automatically compute net pay for all {employees.length} active employees including points bonus.
+                {isRtl
+                  ? `سيتم احتساب صافي المستحق تلقائياً لكافة العاملين (${employees.length} موظفاً وفنياً) شاملاً مكافآت النقاط المعتمدة.`
+                  : `This will automatically compute net pay for all ${employees.length} active employees including points bonus.`}
               </div>
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowRunPayrollModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleRunPayroll}>Execute Batch Run</button>
+              <button className="btn btn-secondary" onClick={() => setShowRunPayrollModal(false)}>
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button className="btn btn-primary" onClick={handleRunPayroll}>
+                {isRtl ? 'تنفيذ واعتماد المسير' : 'Execute Batch Run'}
+              </button>
             </div>
           </div>
         </div>

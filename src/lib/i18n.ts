@@ -24,8 +24,8 @@ export const TRANSLATIONS: Record<string, { en: string; ar: string }> = {
   'menu.accounting': { en: 'Invoicing & Accounting', ar: 'الفواتير والمحاسبة' },
   'menu.hr': { en: 'HR & Payroll', ar: 'الموارد البشرية والرواتب' },
   'menu.dms': { en: 'DMS Documents', ar: 'إدارة المخططات والوثائق' },
-  'menu.helpdesk': { en: 'Helpdesk & Warranty', ar: 'الدعم الفني والضمان' },
-  'menu.reports': { en: 'Reporting Engine', ar: 'محرك التقارير' },
+  'menu.helpdesk': { en: 'Helpdesk & Warranty', ar: 'الدعم الفني وخدمات ما بعد البيع والضمان' },
+  'menu.reports': { en: 'Reporting Engine', ar: 'محرك التقارير وتحليلات الأعمال' },
   'menu.config': { en: 'Configuration', ar: 'إعدادات المصنع' },
 
   // ── Common Actions & Headers ──

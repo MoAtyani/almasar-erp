@@ -325,15 +325,20 @@ export interface SupportTicket {
   id: string
   ticket_number: string
   subject: string
+  subject_ar?: string
   customer_name: string
+  customer_name_ar?: string
   project_id?: string
   project_reference?: string
   priority: TicketPriority
   state: TicketState
   assigned_to?: string
+  assigned_to_ar?: string
   panel_serial_number?: string
   description: string
+  description_ar?: string
   resolution_notes?: string
+  resolution_notes_ar?: string
   created_at: string
   updated_at: string
 }

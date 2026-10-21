@@ -3,12 +3,13 @@ import { useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { DmsDocument, DocCategory } from '@/lib/types'
 import { DOC_CATEGORY_LABELS, formatDate } from '@/lib/constants'
+import { useLanguage } from '@/context/LanguageContext'
 
 const SEED_DOCUMENTS: DmsDocument[] = [
   {
     id: 'doc-1',
     title: 'Single Line Diagram (SLD) - Main Substation MDB-01',
-    title_ar: 'المخطط أحادي الخط (SLD) - المحطة الرئيسية',
+    title_ar: 'المخطط أحادي الخط (SLD) - المحطة الرئيسية لوحة MDB-01',
     file_name: 'SLD-MDB-2500A-REV2.pdf',
     file_size: '4.2 MB',
     file_type: 'PDF',
@@ -92,6 +93,7 @@ const SEED_DOCUMENTS: DmsDocument[] = [
 ]
 
 export default function DmsPage() {
+  const { lang, isRtl } = useLanguage()
   const [documents, setDocuments] = useState<DmsDocument[]>(SEED_DOCUMENTS)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [search, setSearch] = useState('')
@@ -135,7 +137,7 @@ export default function DmsPage() {
       project_reference: uploadForm.project_reference,
       version: uploadForm.version,
       status: 'pending_review',
-      uploaded_by: 'Current User',
+      uploaded_by: isRtl ? 'المستخدم الحالي' : 'Current User',
       upload_date: new Date().toISOString().split('T')[0],
     }
     setDocuments([newDoc, ...documents])
@@ -170,7 +172,7 @@ export default function DmsPage() {
       titleAr="إدارة المخططات والوثائق الهندسية (DMS)"
       actions={
         <button className="btn btn-primary" onClick={() => setShowUploadModal(true)}>
-          📁 Upload Technical Document
+          📁 {isRtl ? 'رفع وثيقة / مخطط هندسي' : 'Upload Technical Document'}
         </button>
       }
     >
@@ -182,8 +184,8 @@ export default function DmsPage() {
           onClick={() => setSelectedCategory('all')}
         >
           <div style={{ fontSize: 24, marginBottom: 4 }}>🗂️</div>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>All Technical Files</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{documents.length} files</div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>{isRtl ? 'كافة المخططات والملفات' : 'All Technical Files'}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{documents.length} {isRtl ? 'ملف' : 'files'}</div>
         </div>
 
         {Object.entries(DOC_CATEGORY_LABELS).map(([catKey, info]) => {
@@ -201,8 +203,12 @@ export default function DmsPage() {
               onClick={() => setSelectedCategory(catKey)}
             >
               <div style={{ fontSize: 24, marginBottom: 4 }}>{info.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: 12 }}>{info.en.split('(')[0]}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{categoryCounts[catKey] || 0} files</div>
+              <div style={{ fontWeight: 600, fontSize: 12 }}>
+                {isRtl ? info.ar : info.en.split('(')[0]}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                {categoryCounts[catKey] || 0} {isRtl ? 'ملف' : 'files'}
+              </div>
             </div>
           )
         })}
@@ -213,15 +219,17 @@ export default function DmsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 700, fontSize: 16 }}>
-              {selectedCategory === 'all' ? 'All Switchgear Documents' : DOC_CATEGORY_LABELS[selectedCategory]?.en}
+              {selectedCategory === 'all'
+                ? (isRtl ? 'كافة وثائق ومخططات اللوحات الكهربائية' : 'All Switchgear Documents')
+                : (isRtl ? DOC_CATEGORY_LABELS[selectedCategory]?.ar : DOC_CATEGORY_LABELS[selectedCategory]?.en)}
             </span>
-            <span className="badge badge-subtle">{filteredDocs.length} items</span>
+            <span className="badge badge-subtle">{filteredDocs.length} {isRtl ? 'مستند' : 'items'}</span>
           </div>
 
           <div style={{ display: 'flex', gap: 12 }}>
             <input
               type="text"
-              placeholder="Search drawings, BoQ, certificates..."
+              placeholder={isRtl ? '...بحث في المخططات، الجداول، شهادات الفحص' : 'Search drawings, BoQ, certificates...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input"
@@ -235,21 +243,21 @@ export default function DmsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Document Title (En / Ar)</th>
-                <th>Category</th>
-                <th>Project Ref</th>
-                <th>Rev</th>
-                <th>File Size</th>
-                <th>Uploaded By</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{isRtl ? 'النوع' : 'Type'}</th>
+                <th>{isRtl ? 'عنوان الوثيقة والمخطط' : 'Document Title'}</th>
+                <th>{isRtl ? 'التصنيف' : 'Category'}</th>
+                <th>{isRtl ? 'رمز المشروع' : 'Project Ref'}</th>
+                <th>{isRtl ? 'الإصدار' : 'Rev'}</th>
+                <th>{isRtl ? 'الحجم' : 'File Size'}</th>
+                <th>{isRtl ? 'بواسطة' : 'Uploaded By'}</th>
+                <th>{isRtl ? 'التاريخ' : 'Date'}</th>
+                <th>{isRtl ? 'الحالة' : 'Status'}</th>
+                <th>{isRtl ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
               {filteredDocs.map(doc => {
-                const catInfo = DOC_CATEGORY_LABELS[doc.category] || { en: doc.category, icon: '📄' }
+                const catInfo = DOC_CATEGORY_LABELS[doc.category] || { en: doc.category, ar: doc.category, icon: '📄' }
                 return (
                   <tr key={doc.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedDoc(doc)}>
                     <td style={{ textAlign: 'center' }}>
@@ -262,15 +270,19 @@ export default function DmsPage() {
                       </span>
                     </td>
                     <td>
-                      <div><strong>{doc.title}</strong></div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{doc.title_ar}</div>
+                      <div><strong>{isRtl ? doc.title_ar : doc.title}</strong></div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {isRtl ? doc.title : doc.title_ar}
+                      </div>
                       <div style={{ fontSize: 11, color: 'var(--accent)' }}>📎 {doc.file_name}</div>
                     </td>
                     <td>
-                      <span style={{ fontSize: 12 }}>{catInfo.icon} {catInfo.en.split('(')[0]}</span>
+                      <span style={{ fontSize: 12 }}>
+                        {catInfo.icon} {isRtl ? catInfo.ar : catInfo.en.split('(')[0]}
+                      </span>
                     </td>
                     <td>
-                      <span className="badge badge-subtle">{doc.project_reference || 'General'}</span>
+                      <span className="badge badge-subtle">{doc.project_reference || (isRtl ? 'عام' : 'General')}</span>
                     </td>
                     <td style={{ fontWeight: 600 }}>{doc.version}</td>
                     <td>{doc.file_size}</td>
@@ -284,14 +296,15 @@ export default function DmsPage() {
                           color: doc.status === 'approved' ? '#22c55e' : '#f59e0b',
                         }}
                       >
-                        {doc.status.toUpperCase()}
+                        {doc.status === 'approved' ? (isRtl ? 'معتمد' : 'APPROVED') : (isRtl ? 'قيد المراجعة' : 'PENDING')}
                       </span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button
                           className="btn btn-sm btn-secondary"
-                          onClick={() => alert(`Downloading ${doc.file_name} (Simulated)`)}
+                          onClick={() => alert(isRtl ? `جاري تحميل ${doc.file_name} (محاكاة)` : `Downloading ${doc.file_name} (Simulated)`)}
+                          title={isRtl ? 'تحميل' : 'Download'}
                         >
                           ⬇️
                         </button>
@@ -300,7 +313,7 @@ export default function DmsPage() {
                             className="btn btn-sm btn-success"
                             onClick={() => handleApprove(doc.id)}
                           >
-                            ✓ Approve
+                            ✓ {isRtl ? 'اعتماد' : 'Approve'}
                           </button>
                         )}
                       </div>
@@ -311,7 +324,7 @@ export default function DmsPage() {
               {filteredDocs.length === 0 && (
                 <tr>
                   <td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>
-                    No documents found. Click &quot;Upload Technical Document&quot; to add files.
+                    {isRtl ? 'لا توجد وثائق. انقر على "رفع وثيقة / مخطط هندسي" لإضافة ملفات.' : 'No documents found. Click "Upload Technical Document" to add files.'}
                   </td>
                 </tr>
               )}
@@ -326,8 +339,10 @@ export default function DmsPage() {
           <div className="modal-content" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 18 }}>{selectedDoc.title}</h3>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{selectedDoc.title_ar}</span>
+                <h3 style={{ fontSize: 18 }}>{isRtl ? selectedDoc.title_ar : selectedDoc.title}</h3>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {isRtl ? selectedDoc.title : selectedDoc.title_ar}
+                </span>
               </div>
               <button className="btn btn-secondary" onClick={() => setSelectedDoc(null)}>✕</button>
             </div>
@@ -342,37 +357,37 @@ export default function DmsPage() {
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{selectedDoc.file_name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                  {selectedDoc.file_size} • Version {selectedDoc.version} • {selectedDoc.file_type} File
+                  {selectedDoc.file_size} • {isRtl ? 'الإصدار' : 'Version'} {selectedDoc.version} • {selectedDoc.file_type}
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Project Reference:</span>
-                  <div style={{ fontWeight: 600 }}>{selectedDoc.project_reference || 'General Standard'}</div>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isRtl ? 'رمز المشروع:' : 'Project Reference:'}</span>
+                  <div style={{ fontWeight: 600 }}>{selectedDoc.project_reference || (isRtl ? 'مواصفة قياسية عامة' : 'General Standard')}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Category:</span>
-                  <div style={{ fontWeight: 600 }}>{DOC_CATEGORY_LABELS[selectedDoc.category]?.en}</div>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isRtl ? 'التصنيف:' : 'Category:'}</span>
+                  <div style={{ fontWeight: 600 }}>{DOC_CATEGORY_LABELS[selectedDoc.category]?.[lang] || selectedDoc.category}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Uploaded By:</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isRtl ? 'بواسطة:' : 'Uploaded By:'}</span>
                   <div style={{ fontWeight: 600 }}>{selectedDoc.uploaded_by}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Upload Date:</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isRtl ? 'تاريخ الرفع:' : 'Upload Date:'}</span>
                   <div style={{ fontWeight: 600 }}>{formatDate(selectedDoc.upload_date)}</div>
                 </div>
               </div>
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => alert(`Simulated Download of ${selectedDoc.file_name}`)}>
-                ⬇️ Download Original File
+              <button className="btn btn-secondary" onClick={() => alert(isRtl ? `جاري تحميل ${selectedDoc.file_name}` : `Simulated Download of ${selectedDoc.file_name}`)}>
+                ⬇️ {isRtl ? 'تحميل الملف الأصلي' : 'Download Original File'}
               </button>
               {selectedDoc.status !== 'approved' && (
                 <button className="btn btn-success" onClick={() => handleApprove(selectedDoc.id)}>
-                  ✓ Approve Engineering Release
+                  ✓ {isRtl ? 'اعتماد الإصدار الهندسي' : 'Approve Engineering Release'}
                 </button>
               )}
             </div>
@@ -386,13 +401,13 @@ export default function DmsPage() {
           <div className="modal-content" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleUpload}>
               <div className="modal-header">
-                <h3>Upload Switchgear Document / Drawing</h3>
+                <h3>{isRtl ? 'رفع وثيقة أو مخطط هندسي للمصنع' : 'Upload Switchgear Document / Drawing'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowUploadModal(false)}>✕</button>
               </div>
 
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
                 <div>
-                  <label className="label">Document Title (English)</label>
+                  <label className="label">{isRtl ? 'عنوان الوثيقة (بالإنجليزية)' : 'Document Title (English)'}</label>
                   <input
                     required
                     type="text"
@@ -404,11 +419,11 @@ export default function DmsPage() {
                 </div>
 
                 <div>
-                  <label className="label">Document Title (Arabic)</label>
+                  <label className="label">{isRtl ? 'عنوان الوثيقة (بالعربية)' : 'Document Title (Arabic)'}</label>
                   <input
                     type="text"
                     className="input"
-                    placeholder="e.g. حساب مقاسات البسبار 3200 أمبير"
+                    placeholder="مثال: حساب مقاسات وقواطع البسبار 3200 أمبير"
                     value={uploadForm.title_ar}
                     onChange={e => setUploadForm({ ...uploadForm, title_ar: e.target.value })}
                   />
@@ -416,23 +431,23 @@ export default function DmsPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">Category</label>
+                    <label className="label">{isRtl ? 'التصنيف الهندسي' : 'Category'}</label>
                     <select
                       className="input"
                       value={uploadForm.category}
                       onChange={e => setUploadForm({ ...uploadForm, category: e.target.value as DocCategory })}
                     >
                       {Object.entries(DOC_CATEGORY_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v.en}</option>
+                        <option key={k} value={k}>{isRtl ? v.ar : v.en}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="label">Project Reference</label>
+                    <label className="label">{isRtl ? 'رمز المشروع' : 'Project Reference'}</label>
                     <input
                       type="text"
                       className="input"
-                      placeholder="e.g. PJ-2026-001"
+                      placeholder="PJ-2026-001"
                       value={uploadForm.project_reference}
                       onChange={e => setUploadForm({ ...uploadForm, project_reference: e.target.value })}
                     />
@@ -441,18 +456,18 @@ export default function DmsPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">File Name</label>
+                    <label className="label">{isRtl ? 'اسم الملف' : 'File Name'}</label>
                     <input
                       required
                       type="text"
                       className="input"
-                      placeholder="e.g. Drawing_MDB_01.dwg"
+                      placeholder="Drawing_MDB_01.dwg"
                       value={uploadForm.file_name}
                       onChange={e => setUploadForm({ ...uploadForm, file_name: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="label">Format</label>
+                    <label className="label">{isRtl ? 'النوع' : 'Format'}</label>
                     <select
                       className="input"
                       value={uploadForm.file_type}
@@ -465,7 +480,7 @@ export default function DmsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="label">Revision</label>
+                    <label className="label">{isRtl ? 'رقم المراجعة' : 'Revision'}</label>
                     <input
                       type="text"
                       className="input"
@@ -478,10 +493,10 @@ export default function DmsPage() {
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowUploadModal(false)}>
-                  Cancel
+                  {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Upload & Register
+                  {isRtl ? 'رفع وتسجيل الوثيقة' : 'Upload & Register'}
                 </button>
               </div>
             </form>

@@ -49,8 +49,8 @@ const NAV_ITEMS = [
     sectionAr: 'الوثائق والدعم الفني',
     items: [
       { href: '/dms', icon: '📁', label: 'DMS Documents', labelAr: 'إدارة الوثائق والمخططات' },
-      { href: '/helpdesk', icon: '🎧', label: 'Helpdesk & Warranty', labelAr: 'الدعم الفني والضمان' },
-      { href: '/reports', icon: '📊', label: 'Reporting Engine', labelAr: 'محرك التقارير' },
+      { href: '/helpdesk', icon: '🎧', label: 'Helpdesk & Warranty', labelAr: 'الدعم الفني وخدمات ما بعد البيع والضمان' },
+      { href: '/reports', icon: '📊', label: 'Reporting Engine', labelAr: 'محرك التقارير وتحليلات الأعمال' },
     ],
   },
   {
