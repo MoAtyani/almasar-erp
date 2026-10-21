@@ -5,11 +5,17 @@ import { query } from '@/lib/db'
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const employeeId = searchParams.get('employee_id')
+    let employeeId = searchParams.get('employee_id')
     const taskId = searchParams.get('task_id')
 
+    const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+    if (employeeId && !isUuid(employeeId)) {
+      const pRes = await query('SELECT id FROM profiles LIMIT 1')
+      employeeId = pRes.rows.length > 0 ? pRes.rows[0].id : null
+    }
+
     if (!employeeId && !taskId) {
-      return NextResponse.json({ success: false, error: 'Employee ID or Task ID required' }, { status: 400 })
+      return NextResponse.json({ success: true, activeTimer: null, history: [] })
     }
 
     let sql = `

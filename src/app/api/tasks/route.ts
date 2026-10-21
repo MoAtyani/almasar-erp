@@ -79,6 +79,20 @@ export async function POST(req: NextRequest) {
     const count = parseInt(countRes.rows[0].count, 10) + 1
     const taskCode = `TSK-2026-${String(count).padStart(4, '0')}`
 
+    let actualProfileId = assigned_employee_id
+    if (assigned_employee_id) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assigned_employee_id)
+      if (isUuid) {
+        const profCheck = await query('SELECT id FROM profiles WHERE id = $1', [assigned_employee_id])
+        if (profCheck.rows.length === 0) {
+          const empCheck = await query('SELECT profile_id FROM employees WHERE id = $1', [assigned_employee_id])
+          actualProfileId = empCheck.rows.length > 0 ? empCheck.rows[0].profile_id : null
+        }
+      } else {
+        actualProfileId = null
+      }
+    }
+
     const insertSql = `
       INSERT INTO technician_tasks (
         task_code, project_id, order_id, department, title, description,
@@ -91,7 +105,7 @@ export async function POST(req: NextRequest) {
     const res = await query(insertSql, [
       taskCode, project_id, order_id || null, department, title, description || null,
       required_deliverables || null, priority, estimated_hours, due_date || null,
-      dependencies || null, required_skills, assigned_employee_id || null, assigned_team || null
+      dependencies || null, required_skills, actualProfileId, assigned_team || null
     ])
 
     const newTask = res.rows[0]
