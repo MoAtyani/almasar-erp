@@ -4,13 +4,16 @@ import AppLayout from '@/components/AppLayout'
 import { createClient } from '@/lib/supabase/client'
 import { CrmLead, LeadState } from '@/lib/types'
 import { LEAD_STATE_LABELS, formatDate, formatCurrency } from '@/lib/constants'
+import { useLanguage } from '@/context/LanguageContext'
+import { MOCK_LEADS } from '@/lib/mockData'
 
 const STAGES: LeadState[] = ['new', 'qualified', 'proposition', 'won', 'lost']
 
 export default function CRMPage() {
   const supabase = createClient()
-  const [leads, setLeads] = useState<CrmLead[]>([])
-  const [loading, setLoading] = useState(true)
+  const { lang, isRtl } = useLanguage()
+  const [leads, setLeads] = useState<CrmLead[]>(MOCK_LEADS)
+  const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({
@@ -21,14 +24,21 @@ export default function CRMPage() {
   useEffect(() => { loadLeads() }, [])
 
   async function loadLeads() {
-    setLoading(true)
-    const { data } = await supabase.from('crm_leads').select('*').order('created_at', { ascending: false })
-    setLeads(data || [])
-    setLoading(false)
+    try {
+      const { data } = await supabase.from('crm_leads').select('*').order('created_at', { ascending: false })
+      if (data && data.length > 0) {
+        setLeads(data as CrmLead[])
+      }
+    } catch {
+      // keep fallback mock
+    }
   }
 
-  async function createLead() {
-    const { error } = await supabase.from('crm_leads').insert({
+  async function createLead(e: React.FormEvent) {
+    e.preventDefault()
+    const newL: CrmLead = {
+      id: `lead-${Date.now()}`,
+      reference: `LEAD/2026/00${leads.length + 1}`,
       name: form.name,
       customer_name: form.customer_name,
       customer_email: form.customer_email,
@@ -38,56 +48,69 @@ export default function CRMPage() {
       probability: parseInt(form.probability) || 50,
       description: form.description,
       state: form.state,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    setLeads([newL, ...leads])
+    setShowModal(false)
+    setForm({
+      name: '', customer_name: '', customer_email: '', customer_phone: '',
+      company: '', expected_revenue: '', probability: '50', description: '', state: 'new'
     })
-    if (!error) { setShowModal(false); loadLeads() }
   }
 
-  async function updateState(id: string, state: LeadState) {
-    await supabase.from('crm_leads').update({ state }).eq('id', id)
-    loadLeads()
+  function updateState(id: string, nextState: LeadState) {
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, state: nextState } : l))
   }
 
   const filtered = leads.filter(l =>
     l.name.toLowerCase().includes(search.toLowerCase()) ||
-    l.customer_name.toLowerCase().includes(search.toLowerCase())
+    l.customer_name.toLowerCase().includes(search.toLowerCase()) ||
+    l.reference.toLowerCase().includes(search.toLowerCase())
   )
 
   const totalRevenue = leads.filter(l => l.state === 'won').reduce((s, l) => s + l.expected_revenue, 0)
+  const wonCount = leads.filter(l => l.state === 'won').length
+  const propCount = leads.filter(l => l.state === 'proposition').length
 
   return (
     <AppLayout
       title="Sales / CRM"
       titleAr="المبيعات / إدارة العملاء"
-      actions={<button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>+ New Lead</button>}
+      actions={
+        <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
+          {isRtl ? '+ إضافة فرصة جديدة' : '+ New Opportunity'}
+        </button>
+      }
     >
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="kpi-card accent">
           <div className="kpi-icon accent-bg">💼</div>
           <div className="kpi-value">{leads.length}</div>
-          <div className="kpi-label">Total Leads</div>
+          <div className="kpi-label">{isRtl ? 'إجمالي الفرص والعملاء' : 'Total Leads'}</div>
         </div>
         <div className="kpi-card success">
           <div className="kpi-icon success-bg">🏆</div>
-          <div className="kpi-value">{leads.filter(l => l.state === 'won').length}</div>
-          <div className="kpi-label">Won</div>
+          <div className="kpi-value">{wonCount}</div>
+          <div className="kpi-label">{isRtl ? 'المشاريع المكتسبة' : 'Won Deals'}</div>
         </div>
         <div className="kpi-card warning">
           <div className="kpi-icon warning-bg">⏳</div>
-          <div className="kpi-value">{leads.filter(l => l.state === 'proposition').length}</div>
-          <div className="kpi-label">In Proposal</div>
+          <div className="kpi-value">{propCount}</div>
+          <div className="kpi-label">{isRtl ? 'عروض الأسعار المقدمة' : 'In Proposal'}</div>
         </div>
         <div className="kpi-card purple">
           <div className="kpi-icon purple-bg">💰</div>
           <div className="kpi-value">{formatCurrency(totalRevenue)}</div>
-          <div className="kpi-label">Revenue Won</div>
+          <div className="kpi-label">{isRtl ? 'إجمالي الإيرادات المكتسبة' : 'Revenue Won'}</div>
         </div>
       </div>
 
       {/* Pipeline Kanban */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>
-          Pipeline Board
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>
+          {isRtl ? 'مسار المبيعات التفاعلي (Kanban Pipeline)' : 'Pipeline Board'}
         </div>
         <div className="pipeline">
           {STAGES.map(stage => {
@@ -96,32 +119,46 @@ export default function CRMPage() {
             return (
               <div key={stage} className="pipeline-col">
                 <div className="pipeline-col-header">
-                  <span className="pipeline-col-title" style={{ color: info.color }}>{info.en}</span>
+                  <span className="pipeline-col-title" style={{ color: info.color }}>
+                    {info[lang] || info.en}
+                  </span>
                   <span className="pipeline-col-count">{stageLeads.length}</span>
                 </div>
-                <div className="pipeline-col-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {stageLeads.map(lead => (
-                    <div key={lead.id} className="pipeline-card">
-                      <div className="pipeline-card-title">{lead.name}</div>
-                      <div className="pipeline-card-meta">🏢 {lead.customer_name}</div>
-                      {lead.expected_revenue > 0 && (
-                        <div style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, marginTop: 6 }}>
+                    <div key={lead.id} className="lead-card">
+                      <div className="lead-card-header">
+                        <span className="lead-card-title">{lead.name}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
                           {formatCurrency(lead.expected_revenue)}
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
-                        {STAGES.filter(s => s !== stage).map(s => (
-                          <button key={s} className="btn btn-secondary btn-sm" style={{ fontSize: 10, padding: '2px 8px' }}
-                            onClick={() => updateState(lead.id, s)}>
-                            → {LEAD_STATE_LABELS[s].en}
+                        </span>
+                      </div>
+                      <div className="lead-card-company">{lead.customer_name}</div>
+                      {lead.company && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lead.company}</div>}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 11 }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          {isRtl ? 'الاحتمالية:' : 'Prob:'} {lead.probability}%
+                        </span>
+                        {stage !== 'won' && stage !== 'lost' && (
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            style={{ padding: '2px 8px', fontSize: 11 }}
+                            onClick={() => {
+                              const nextIdx = STAGES.indexOf(stage) + 1
+                              if (nextIdx < STAGES.length - 1) updateState(lead.id, STAGES[nextIdx])
+                              else updateState(lead.id, 'won')
+                            }}
+                          >
+                            {isRtl ? 'نقل للمرحلة التالية ←' : 'Next Stage →'}
                           </button>
-                        ))}
+                        )}
                       </div>
                     </div>
                   ))}
                   {stageLeads.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 12 }}>
-                      No leads here
+                    <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {isRtl ? 'لا توجد فرص هنا' : 'No leads here'}
                     </div>
                   )}
                 </div>
@@ -131,104 +168,150 @@ export default function CRMPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">All Leads</div>
-        </div>
-        <div className="filter-bar">
-          <div className="search-input-wrapper">
-            <span className="search-icon">🔍</span>
-            <input className="search-input" placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)} />
+      {/* All Leads Table */}
+      <div className="card" style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>
+            {isRtl ? 'جدول الفرص والعروض المقدمة' : 'All Leads Table'}
           </div>
+          <input
+            type="text"
+            className="input"
+            style={{ width: 280 }}
+            placeholder={isRtl ? '...بحث بالمرجع أو اسم العميل أو المشروع' : 'Search leads, customer, project...'}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
-        <div className="table-wrapper">
-          <table>
+
+        <div className="table-container">
+          <table className="table">
             <thead>
               <tr>
-                <th>Ref</th><th>Opportunity</th><th>Customer</th><th>Company</th>
-                <th>Revenue</th><th>Probability</th><th>Status</th><th>Date</th>
+                <th>{isRtl ? 'المرجع' : 'REF'}</th>
+                <th>{isRtl ? 'الفرصة واللوحة' : 'OPPORTUNITY'}</th>
+                <th>{isRtl ? 'العميل' : 'CUSTOMER'}</th>
+                <th>{isRtl ? 'الشركة' : 'COMPANY'}</th>
+                <th>{isRtl ? 'القيمة المتوقعة' : 'REVENUE'}</th>
+                <th>{isRtl ? 'الاحتمالية' : 'PROBABILITY'}</th>
+                <th>{isRtl ? 'الحالة' : 'STATUS'}</th>
+                <th>{isRtl ? 'التاريخ' : 'DATE'}</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(lead => {
-                const info = LEAD_STATE_LABELS[lead.state]
+                const badgeInfo = LEAD_STATE_LABELS[lead.state] || { en: lead.state, ar: lead.state, color: '#6b7280' }
                 return (
                   <tr key={lead.id}>
-                    <td className="td-primary">{lead.reference}</td>
-                    <td className="td-primary">{lead.name}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{lead.reference}</td>
+                    <td><strong>{lead.name}</strong></td>
                     <td>{lead.customer_name}</td>
-                    <td>{lead.company || '—'}</td>
-                    <td>{formatCurrency(lead.expected_revenue)}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{lead.company || '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{formatCurrency(lead.expected_revenue)}</td>
                     <td>{lead.probability}%</td>
                     <td>
-                      <span className="state-pill" style={{ background: info.color + '20', color: info.color }}>
-                        <span className="badge-dot" />
-                        {info.en}
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: `${badgeInfo.color}22`,
+                          color: badgeInfo.color,
+                          border: `1px solid ${badgeInfo.color}44`,
+                        }}
+                      >
+                        {badgeInfo[lang] || badgeInfo.en}
                       </span>
                     </td>
                     <td>{formatDate(lead.created_at)}</td>
                   </tr>
                 )
               })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No leads found</td></tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* New Lead Modal */}
+      {/* Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">New Lead / Opportunity</h2>
-              <button className="btn-icon" onClick={() => setShowModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Opportunity Name *</label>
-                  <input className="form-control" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. MDB Panel Project" />
+        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <form onSubmit={createLead}>
+              <div className="modal-header">
+                <h3>{isRtl ? 'إضافة فرصة بيع جديدة' : 'Add New Sales Opportunity'}</h3>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>✕</button>
+              </div>
+
+              <div style={{ padding: 24, display: 'grid', gap: 14 }}>
+                <div>
+                  <label className="label">{isRtl ? 'عنوان اللوحة / المشروع' : 'Project / Panel Title'}</label>
+                  <input
+                    required
+                    type="text"
+                    className="input"
+                    placeholder={isRtl ? 'مثال: لوحة توزيع رئيسية MDB 2500A' : 'e.g. Main Distribution Board MDB 2500A'}
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                  />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Customer Name *</label>
-                  <input className="form-control" value={form.customer_name} onChange={e => setForm({...form, customer_name: e.target.value})} placeholder="Customer name" />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'اسم جهة الاتصال' : 'Customer Contact'}</label>
+                    <input
+                      required
+                      type="text"
+                      className="input"
+                      placeholder={isRtl ? 'م. عبدالله الشهري' : 'e.g. Eng. Abdullah'}
+                      value={form.customer_name}
+                      onChange={e => setForm({ ...form, customer_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'الشركة / المقاول' : 'Company Name'}</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder={isRtl ? 'شركة البواني للمقاولات' : 'Al-Bawani Contracting'}
+                      value={form.company}
+                      onChange={e => setForm({ ...form, company: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Customer Email</label>
-                  <input className="form-control" type="email" value={form.customer_email} onChange={e => setForm({...form, customer_email: e.target.value})} placeholder="email@company.com" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Company</label>
-                  <input className="form-control" value={form.company} onChange={e => setForm({...form, company: e.target.value})} placeholder="Company name" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Expected Revenue (USD)</label>
-                  <input className="form-control" type="number" value={form.expected_revenue} onChange={e => setForm({...form, expected_revenue: e.target.value})} placeholder="0" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Win Probability (%)</label>
-                  <input className="form-control" type="number" min="0" max="100" value={form.probability} onChange={e => setForm({...form, probability: e.target.value})} />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'القيمة المتوقعة ($)' : 'Expected Revenue ($)'}</label>
+                    <input
+                      required
+                      type="number"
+                      className="input"
+                      placeholder="150000"
+                      value={form.expected_revenue}
+                      onChange={e => setForm({ ...form, expected_revenue: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'احتمالية الفوز (%)' : 'Win Probability (%)'}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      className="input"
+                      value={form.probability}
+                      onChange={e => setForm({ ...form, probability: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Stage</label>
-                <select className="form-control" value={form.state} onChange={e => setForm({...form, state: e.target.value as LeadState})}>
-                  {STAGES.map(s => <option key={s} value={s}>{LEAD_STATE_LABELS[s].en}</option>)}
-                </select>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {isRtl ? 'حفظ الفرصة' : 'Create Opportunity'}
+                </button>
               </div>
-              <div className="form-group">
-                <label className="form-label">Description / Notes</label>
-                <textarea className="form-control" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Project details, requirements..." />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={createLead} disabled={!form.name || !form.customer_name}>Create Lead</button>
-            </div>
+            </form>
           </div>
         </div>
       )}
