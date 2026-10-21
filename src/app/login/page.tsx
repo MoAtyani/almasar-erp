@@ -80,6 +80,56 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 10 }}>
+            Or explore immediately with demo profiles:
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}
+              onClick={() => {
+                const gm = {
+                  id: 'usr-admin',
+                  full_name: 'Eng. Tariq Al-Masar',
+                  full_name_ar: 'م. طارق المسار',
+                  email: 'admin@almasar-switchgear.com',
+                  role: 'general_manager',
+                  department: 'Executive Management',
+                  reward_points: 1250,
+                  is_active: true,
+                }
+                localStorage.setItem('almasar_user', JSON.stringify(gm))
+                router.push('/dashboard')
+              }}
+            >
+              👔 Enter as General Manager (المدير العام)
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}
+              onClick={() => {
+                const tech = {
+                  id: 'usr-tech1',
+                  full_name: 'Mohammed Salem',
+                  full_name_ar: 'محمد سالم',
+                  email: 'mohammed.s@almasar-switchgear.com',
+                  role: 'technician',
+                  department: 'Panel Fabrication',
+                  reward_points: 640,
+                  is_active: true,
+                }
+                localStorage.setItem('almasar_user', JSON.stringify(tech))
+                router.push('/tasks')
+              }}
+            >
+              ⚡ Enter as Panel Technician (فني لوحات)
+            </button>
+          </div>
+        </div>
+
         <p style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--text-muted)' }}>
           Al-Masar Switchgear — Confidential Internal System
         </p>

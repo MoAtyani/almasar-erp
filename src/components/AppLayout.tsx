@@ -45,19 +45,44 @@ interface Props {
   actions?: React.ReactNode
 }
 
+const DEFAULT_PROFILE: Profile = {
+  id: 'usr-admin',
+  full_name: 'Eng. Tariq Al-Masar',
+  full_name_ar: 'م. طارق المسار',
+  email: 'admin@almasar-switchgear.com',
+  role: 'general_manager',
+  department: 'Executive Management',
+  reward_points: 1250,
+  is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
 export default function AppLayout({ children, title, titleAr, actions }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE)
   const [lang, setLang] = useState<'en' | 'ar'>('en')
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.push('/login'); return }
-      supabase.from('profiles').select('*').eq('id', data.user.id).single()
-        .then(({ data: p }) => { if (p) setProfile(p) })
-    })
+    supabase.auth.getUser()
+      .then(({ data }) => {
+        if (data?.user) {
+          supabase.from('profiles').select('*').eq('id', data.user.id).single()
+            .then(({ data: p }) => { if (p) setProfile(p) })
+        } else {
+          const stored = typeof window !== 'undefined' ? localStorage.getItem('almasar_user') : null
+          if (stored) {
+            try { setProfile(JSON.parse(stored)) } catch { setProfile(DEFAULT_PROFILE) }
+          } else {
+            setProfile(DEFAULT_PROFILE)
+          }
+        }
+      })
+      .catch(() => {
+        setProfile(DEFAULT_PROFILE)
+      })
   }, [])
 
   useEffect(() => {
@@ -66,7 +91,8 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
   }, [lang])
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    try { await supabase.auth.signOut() } catch {}
+    if (typeof window !== 'undefined') localStorage.removeItem('almasar_user')
     router.push('/login')
   }
 
