@@ -81,7 +81,24 @@ export default {
         }, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      // 3. Projects API
+      // 2.5 D1 Batch Synchronization
+      if (pathname === '/api/d1-batch-sync' && method === 'POST') {
+        const body: any = await request.json();
+        const statements: string[] = body.statements || [];
+        let executed = 0;
+        const errors: any[] = [];
+        for (const sql of statements) {
+          try {
+            await env.DB.prepare(sql).run();
+            executed++;
+          } catch (e: any) {
+            errors.push({ sql: sql.substring(0, 100), error: e.message || String(e) });
+          }
+        }
+        return Response.json({ success: true, count: executed, errors }, { headers: corsHeaders });
+      }
+
+      // 3. Projects API (CRUD)
       if (pathname === '/api/projects') {
         if (method === 'GET') {
           const res = await env.DB.prepare('SELECT * FROM panel_projects ORDER BY created_at DESC').all();
@@ -94,24 +111,403 @@ export default {
           const ref = `PRJ-2026-${String(Number(countRes?.c || 0) + 1).padStart(4, '0')}`;
           
           await env.DB.prepare(`
-            INSERT INTO panel_projects (id, reference, name, customer_name, description, quotation_amount, priority, state)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'new')
-          `).bind(id, ref, body.name, body.customer_name || 'Direct Client', body.description || '', body.quotation_amount || 0, body.priority || 'medium').run();
+            INSERT INTO panel_projects (
+              id, reference, name, customer_name, customer_email, customer_phone,
+              location, description, quotation_amount, currency, priority,
+              date_start, date_delivery, state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id,
+            ref,
+            body.name,
+            body.customer_name || 'Direct Client',
+            body.customer_email || '',
+            body.customer_phone || '',
+            body.location || 'KSA',
+            body.description || '',
+            body.quotation_amount ? Number(body.quotation_amount) : 0,
+            body.currency || 'SAR',
+            body.priority || 'medium',
+            body.date_start || new Date().toISOString(),
+            body.date_delivery || null,
+            body.state || 'new'
+          ).run();
 
           return Response.json({ success: true, project: { id, reference: ref, ...body } }, { headers: corsHeaders, status: 201 });
         }
+        if (method === 'PUT' || method === 'PATCH') {
+          const body: any = await request.json();
+          if (!body.id) {
+            return Response.json({ success: false, error: 'Project ID required' }, { headers: corsHeaders, status: 400 });
+          }
+          await env.DB.prepare(`
+            UPDATE panel_projects
+            SET name = COALESCE(?, name),
+                customer_name = COALESCE(?, customer_name),
+                customer_email = COALESCE(?, customer_email),
+                customer_phone = COALESCE(?, customer_phone),
+                location = COALESCE(?, location),
+                description = COALESCE(?, description),
+                quotation_amount = COALESCE(?, quotation_amount),
+                priority = COALESCE(?, priority),
+                state = COALESCE(?, state),
+                date_delivery = COALESCE(?, date_delivery),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(
+            body.name || null,
+            body.customer_name || null,
+            body.customer_email || null,
+            body.customer_phone || null,
+            body.location || null,
+            body.description || null,
+            body.quotation_amount !== undefined ? Number(body.quotation_amount) : null,
+            body.priority || null,
+            body.state || null,
+            body.date_delivery || null,
+            body.id
+          ).run();
+          return Response.json({ success: true, message: 'Project updated successfully' }, { headers: corsHeaders });
+        }
+        if (method === 'DELETE') {
+          const id = url.searchParams.get('id');
+          if (!id) return Response.json({ success: false, error: 'Project ID required' }, { headers: corsHeaders, status: 400 });
+          await env.DB.prepare('DELETE FROM technician_tasks WHERE project_id = ?').bind(id).run();
+          await env.DB.prepare('DELETE FROM production_orders WHERE project_id = ?').bind(id).run();
+          await env.DB.prepare('DELETE FROM purchase_orders WHERE project_id = ?').bind(id).run();
+          await env.DB.prepare('DELETE FROM panel_projects WHERE id = ?').bind(id).run();
+          return Response.json({ success: true, message: 'Project deleted successfully' }, { headers: corsHeaders });
+        }
       }
 
-      // 4. Users & Roles Management (Manager Add, Edit, Delete, Permissions)
-      if (pathname === '/api/users') {
+      // 4. Tasks API (Workflow, Assign, Finish, Move to other tasks)
+      if (pathname === '/api/tasks') {
+        if (method === 'GET') {
+          const tasks = await env.DB.prepare(`
+            SELECT t.*, p.name as project_name, p.reference as project_reference,
+                   prof.full_name as assigned_employee_name, prof.full_name_ar as assigned_employee_name_ar
+            FROM technician_tasks t
+            LEFT JOIN panel_projects p ON t.project_id = p.id
+            LEFT JOIN profiles prof ON t.assigned_employee_id = prof.id
+            ORDER BY t.created_at DESC
+          `).all();
+          return Response.json({ success: true, tasks: tasks.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const id = crypto.randomUUID();
+          const countRes = await env.DB.prepare('SELECT COUNT(*) as c FROM technician_tasks').first();
+          const code = `TSK-${String(Number(countRes?.c || 0) + 1).padStart(4, '0')}`;
+
+          await env.DB.prepare(`
+            INSERT INTO technician_tasks (
+              id, task_code, title, description, project_id, assigned_employee_id,
+              department, status, priority, estimated_hours
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id,
+            code,
+            body.title,
+            body.description || '',
+            body.project_id || null,
+            body.assigned_employee_id || body.assigned_to || null,
+            body.department || 'Assembly',
+            body.status || 'assigned',
+            body.priority || 'medium',
+            body.estimated_hours ? Number(body.estimated_hours) : 8.0
+          ).run();
+
+          return Response.json({ success: true, task: { id, task_code: code, ...body } }, { headers: corsHeaders, status: 201 });
+        }
+        if (method === 'PUT' || method === 'PATCH') {
+          const body: any = await request.json();
+          if (!body.id) return Response.json({ success: false, error: 'Task ID required' }, { headers: corsHeaders, status: 400 });
+
+          // Support state advancement
+          let newStatus = body.status;
+          if (body.action === 'start') newStatus = 'in_progress';
+          if (body.action === 'finish' || body.action === 'complete') newStatus = 'completed';
+
+          await env.DB.prepare(`
+            UPDATE technician_tasks
+            SET title = COALESCE(?, title),
+                description = COALESCE(?, description),
+                department = COALESCE(?, department),
+                assigned_employee_id = COALESCE(?, assigned_employee_id),
+                priority = COALESCE(?, priority),
+                status = COALESCE(?, status),
+                estimated_hours = COALESCE(?, estimated_hours),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(
+            body.title || null,
+            body.description || null,
+            body.department || null,
+            body.assigned_employee_id || body.assigned_to || null,
+            body.priority || null,
+            newStatus || null,
+            body.estimated_hours !== undefined ? Number(body.estimated_hours) : null,
+            body.id
+          ).run();
+
+          return Response.json({ success: true, message: 'Task updated successfully' }, { headers: corsHeaders });
+        }
+        if (method === 'DELETE') {
+          const id = url.searchParams.get('id');
+          if (!id) return Response.json({ success: false, error: 'Task ID required' }, { headers: corsHeaders, status: 400 });
+          await env.DB.prepare('DELETE FROM technician_tasks WHERE id = ?').bind(id).run();
+          return Response.json({ success: true, message: 'Task deleted successfully' }, { headers: corsHeaders });
+        }
+      }
+
+      // 5. Production Orders
+      if (pathname === '/api/production/orders') {
+        if (method === 'GET') {
+          const res = await env.DB.prepare(`
+            SELECT o.*, p.reference as project_ref, p.name as project_name
+            FROM production_orders o
+            LEFT JOIN panel_projects p ON o.project_id = p.id
+            ORDER BY o.created_at DESC
+          `).all();
+          return Response.json({ success: true, orders: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const id = crypto.randomUUID();
+          const countRes = await env.DB.prepare('SELECT COUNT(*) as c FROM production_orders').first();
+          const orderNum = `ORD-2026-${String(Number(countRes?.c || 0) + 1).padStart(3, '0')}`;
+
+          await env.DB.prepare(`
+            INSERT INTO production_orders (
+              id, order_number, project_id, item_description, department, stage, quantity, requires_painting
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id,
+            orderNum,
+            body.project_id || null,
+            body.item_description || 'Switchgear Panel Assembly',
+            body.department || 'electrical',
+            body.stage || 'in_progress',
+            body.quantity ? Number(body.quantity) : 1,
+            body.requires_painting ? 1 : 0
+          ).run();
+
+          return Response.json({ success: true, order: { id, order_number: orderNum, ...body } }, { headers: corsHeaders, status: 201 });
+        }
+        if (method === 'PUT' || method === 'PATCH') {
+          const body: any = await request.json();
+          if (!body.id) return Response.json({ success: false, error: 'Order ID required' }, { headers: corsHeaders, status: 400 });
+
+          await env.DB.prepare(`
+            UPDATE production_orders
+            SET item_description = COALESCE(?, item_description),
+                department = COALESCE(?, department),
+                stage = COALESCE(?, stage),
+                quantity = COALESCE(?, quantity),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(
+            body.item_description || null,
+            body.department || null,
+            body.stage || null,
+            body.quantity !== undefined ? Number(body.quantity) : null,
+            body.id
+          ).run();
+
+          return Response.json({ success: true, message: 'Production order updated successfully' }, { headers: corsHeaders });
+        }
+        if (method === 'DELETE') {
+          const id = url.searchParams.get('id');
+          if (!id) return Response.json({ success: false, error: 'Order ID required' }, { headers: corsHeaders, status: 400 });
+          await env.DB.prepare('DELETE FROM production_orders WHERE id = ?').bind(id).run();
+          return Response.json({ success: true, message: 'Production order deleted successfully' }, { headers: corsHeaders });
+        }
+      }
+
+      // 6. Procurement & Purchase Orders (With Project Cost & Purchase Lines)
+      if (pathname === '/api/procurement') {
+        if (method === 'GET') {
+          const pos = await env.DB.prepare(`
+            SELECT po.*, p.reference as project_reference, p.name as project_name
+            FROM purchase_orders po
+            LEFT JOIN panel_projects p ON po.project_id = p.id
+            ORDER BY po.created_at DESC
+          `).all();
+
+          // Also get lines
+          const lines = await env.DB.prepare('SELECT * FROM purchase_order_lines').all();
+          const linesByPo: Record<string, any[]> = {};
+          for (const l of lines.results as any[]) {
+            if (!linesByPo[l.po_id]) linesByPo[l.po_id] = [];
+            linesByPo[l.po_id].push(l);
+          }
+
+          const combined = (pos.results as any[]).map(po => ({
+            ...po,
+            lines: linesByPo[po.id] || []
+          }));
+
+          // Calculate project procurement costs
+          const projectCosts = await env.DB.prepare(`
+            SELECT p.id, p.reference, p.name, SUM(po.total_amount) as total_procured_cost, COUNT(po.id) as po_count
+            FROM panel_projects p
+            LEFT JOIN purchase_orders po ON p.id = po.project_id
+            GROUP BY p.id
+          `).all();
+
+          return Response.json({ success: true, orders: combined, project_costs: projectCosts.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const poId = crypto.randomUUID();
+          const countRes = await env.DB.prepare('SELECT COUNT(*) as c FROM purchase_orders').first();
+          const poNum = `PO-2026-${String(Number(countRes?.c || 0) + 1).padStart(4, '0')}`;
+          const lines: any[] = body.lines || [];
+
+          let total = 0;
+          for (const l of lines) {
+            total += (Number(l.quantity || 1) * Number(l.unit_price || 0));
+          }
+
+          await env.DB.prepare(`
+            INSERT INTO purchase_orders (id, po_number, supplier_name, project_id, total_amount, currency, status, order_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          `).bind(
+            poId,
+            poNum,
+            body.supplier_name || 'ABB Global',
+            body.project_id || null,
+            total,
+            body.currency || 'SAR',
+            'confirmed'
+          ).run();
+
+          for (const l of lines) {
+            await env.DB.prepare(`
+              INSERT INTO purchase_order_lines (id, po_id, item_id, item_description, quantity, unit_price, total_price)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              crypto.randomUUID(),
+              poId,
+              l.item_id || null,
+              l.item_description || 'Switchgear Component',
+              Number(l.quantity || 1),
+              Number(l.unit_price || 0),
+              Number(l.quantity || 1) * Number(l.unit_price || 0)
+            ).run();
+          }
+
+          return Response.json({ success: true, po_id: poId, po_number: poNum, total_amount: total }, { headers: corsHeaders, status: 201 });
+        }
+        if (method === 'DELETE') {
+          const id = url.searchParams.get('id');
+          if (!id) return Response.json({ success: false, error: 'PO ID required' }, { headers: corsHeaders, status: 400 });
+          await env.DB.prepare('DELETE FROM purchase_order_lines WHERE po_id = ?').bind(id).run();
+          await env.DB.prepare('DELETE FROM purchase_orders WHERE id = ?').bind(id).run();
+          return Response.json({ success: true, message: 'Purchase order deleted successfully' }, { headers: corsHeaders });
+        }
+      }
+
+      // 7. Warehouse & Inventory Items (CRUD + Assign to User for Project)
+      if (pathname === '/api/inventory') {
+        if (method === 'GET') {
+          const res = await env.DB.prepare('SELECT * FROM inventory_items ORDER BY description ASC').all();
+          return Response.json({ success: true, items: res.results, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const id = crypto.randomUUID();
+
+          await env.DB.prepare(`
+            INSERT INTO inventory_items (
+              id, sku, barcode, description, description_ar, category, uom,
+              qty_on_hand, qty_reserved, qty_available, reorder_threshold, purchase_cost,
+              warehouse_location, supplier_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id,
+            body.sku || `SKU-${Date.now().toString().slice(-4)}`,
+            body.barcode || `BAR-${Date.now().toString().slice(-6)}`,
+            body.description,
+            body.description_ar || body.description,
+            body.category || 'raw_materials',
+            body.uom || 'PCS',
+            body.qty_on_hand ? Number(body.qty_on_hand) : 50,
+            0,
+            body.qty_on_hand ? Number(body.qty_on_hand) : 50,
+            body.reorder_threshold ? Number(body.reorder_threshold) : 10,
+            body.purchase_cost ? Number(body.purchase_cost) : 100,
+            body.warehouse_location || 'Zone A - Main Warehouse',
+            body.supplier_name || 'Schneider / ABB'
+          ).run();
+
+          return Response.json({ success: true, id, ...body }, { headers: corsHeaders, status: 201 });
+        }
+        if (method === 'PUT' || method === 'PATCH') {
+          const body: any = await request.json();
+          if (!body.id) return Response.json({ success: false, error: 'Item ID required' }, { headers: corsHeaders, status: 400 });
+
+          // Assign to Project / User
+          if (body.action === 'assign_to_user_project') {
+            const qtyNum = Number(body.quantity || 1);
+            const item: any = await env.DB.prepare('SELECT * FROM inventory_items WHERE id = ?').bind(body.id).first();
+            if (!item) return Response.json({ success: false, error: 'Item not found' }, { headers: corsHeaders, status: 404 });
+            if (Number(item.qty_on_hand) < qtyNum) {
+              return Response.json({ success: false, error: 'Insufficient stock in warehouse' }, { headers: corsHeaders, status: 400 });
+            }
+
+            const newBalance = Number(item.qty_on_hand) - qtyNum;
+            await env.DB.prepare('UPDATE inventory_items SET qty_on_hand = ?, qty_available = ? WHERE id = ?')
+              .bind(newBalance, newBalance, body.id).run();
+
+            return Response.json({ success: true, message: `Successfully issued ${qtyNum} units to project`, balance: newBalance }, { headers: corsHeaders });
+          }
+
+          // Edit Item
+          await env.DB.prepare(`
+            UPDATE inventory_items
+            SET sku = COALESCE(?, sku),
+                description = COALESCE(?, description),
+                category = COALESCE(?, category),
+                qty_on_hand = COALESCE(?, qty_on_hand),
+                qty_available = COALESCE(?, qty_on_hand),
+                reorder_threshold = COALESCE(?, reorder_threshold),
+                purchase_cost = COALESCE(?, purchase_cost),
+                warehouse_location = COALESCE(?, warehouse_location)
+            WHERE id = ?
+          `).bind(
+            body.sku || null,
+            body.description || null,
+            body.category || null,
+            body.qty_on_hand !== undefined ? Number(body.qty_on_hand) : null,
+            body.qty_on_hand !== undefined ? Number(body.qty_on_hand) : null,
+            body.reorder_threshold !== undefined ? Number(body.reorder_threshold) : null,
+            body.purchase_cost !== undefined ? Number(body.purchase_cost) : null,
+            body.warehouse_location || null,
+            body.id
+          ).run();
+
+          return Response.json({ success: true, message: 'Item updated successfully' }, { headers: corsHeaders });
+        }
+        if (method === 'DELETE') {
+          const id = url.searchParams.get('id');
+          if (!id) return Response.json({ success: false, error: 'Item ID required' }, { headers: corsHeaders, status: 400 });
+          await env.DB.prepare('DELETE FROM purchase_order_lines WHERE item_id = ?').bind(id).run();
+          await env.DB.prepare('DELETE FROM inventory_items WHERE id = ?').bind(id).run();
+          return Response.json({ success: true, message: 'Item deleted successfully' }, { headers: corsHeaders });
+        }
+      }
+
+      // 8. Users & Roles Management (Manager Add, Edit, Delete, Permissions)
+      if (pathname === '/api/users' || pathname === '/api/hr') {
         if (method === 'GET') {
           const users = await env.DB.prepare(`
-            SELECT p.*, e.job_title, e.annual_leave_balance, e.employment_status
+            SELECT p.*, e.job_title, e.annual_leave_balance, COALESCE(e.employment_status, 'active') as employment_status
             FROM profiles p
             LEFT JOIN employees e ON p.id = e.profile_id
             ORDER BY p.full_name ASC
           `).all();
-          return Response.json({ success: true, users: users.results }, { headers: corsHeaders });
+          return Response.json({ success: true, users: users.results, data: users.results }, { headers: corsHeaders });
         }
 
         if (method === 'POST') {
@@ -129,13 +525,17 @@ export default {
           ).run();
 
           // Also insert into employees table
-          await env.DB.prepare(`
-            INSERT INTO employees (id, employee_id, profile_id, full_name, full_name_ar, department, job_title, employment_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-          `).bind(
-            crypto.randomUUID(), userCode, id, body.full_name, body.full_name_ar || body.full_name,
-            body.department || 'Production', body.role || 'technician'
-          ).run();
+          try {
+            await env.DB.prepare(`
+              INSERT INTO employees (id, employee_code, profile_id, full_name, full_name_ar, department, job_title, employment_status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+            `).bind(
+              crypto.randomUUID(), userCode, id, body.full_name, body.full_name_ar || body.full_name,
+              body.department || 'Production', body.job_title || body.role || 'technician'
+            ).run();
+          } catch (e) {
+            console.warn('Employee profile created, employee record skipped:', e);
+          }
 
           return Response.json({ success: true, user: { id, user_code: userCode, ...body } }, { headers: corsHeaders, status: 201 });
         }
@@ -168,6 +568,23 @@ export default {
             body.id
           ).run();
 
+          try {
+            await env.DB.prepare(`
+              UPDATE employees
+              SET full_name = COALESCE(?, full_name),
+                  department = COALESCE(?, department),
+                  job_title = COALESCE(?, job_title)
+              WHERE profile_id = ?
+            `).bind(
+              body.full_name || null,
+              body.department || null,
+              body.job_title || null,
+              body.id
+            ).run();
+          } catch (e) {
+            // ignore employee update error
+          }
+
           return Response.json({ success: true, message: 'User updated successfully' }, { headers: corsHeaders });
         }
 
@@ -177,31 +594,11 @@ export default {
             return Response.json({ success: false, error: 'User ID parameter is required' }, { headers: corsHeaders, status: 400 });
           }
 
-          await env.DB.prepare('DELETE FROM employees WHERE profile_id = ?').bind(id).run();
+          await env.DB.prepare('DELETE FROM employees WHERE profile_id = ? OR id = ?').bind(id, id).run();
           await env.DB.prepare('DELETE FROM profiles WHERE id = ?').bind(id).run();
 
           return Response.json({ success: true, message: 'User deleted successfully' }, { headers: corsHeaders });
         }
-      }
-
-      // 5. Production Orders
-      if (pathname === '/api/production/orders') {
-        if (method === 'GET') {
-          const dept = url.searchParams.get('department');
-          let query = 'SELECT o.*, p.reference as project_ref, p.name as project_name FROM production_orders o LEFT JOIN panel_projects p ON o.project_id = p.id';
-          if (dept) {
-            query += ` WHERE o.department = '${dept}'`;
-          }
-          query += ' ORDER BY o.created_at DESC';
-          const res = await env.DB.prepare(query).all();
-          return Response.json({ success: true, orders: res.results }, { headers: corsHeaders });
-        }
-      }
-
-      // 6. Inventory Items
-      if (pathname === '/api/inventory') {
-        const res = await env.DB.prepare('SELECT * FROM inventory_items ORDER BY description ASC').all();
-        return Response.json({ success: true, items: res.results }, { headers: corsHeaders });
       }
 
       // 404 for unknown endpoints

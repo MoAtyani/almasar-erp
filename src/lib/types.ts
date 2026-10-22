@@ -38,10 +38,14 @@ export interface Profile {
 export interface PanelProject {
   id: string
   reference: string
+  name?: string
   customer_name: string
   customer_email?: string
   customer_phone?: string
   location?: string
+  quotation_amount?: number
+  currency?: string
+  priority?: string
   date_start: string
   date_delivery?: string
   description?: string

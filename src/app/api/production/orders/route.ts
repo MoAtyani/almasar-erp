@@ -210,3 +210,68 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
+
+// PUT /api/production/orders - Edit order
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { id, item_description, department, quantity, requires_painting, deadline, assigned_employee_id, stage } = body
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 })
+    }
+
+    const updateSql = `
+      UPDATE production_orders
+      SET item_description = COALESCE($1, item_description),
+          department = COALESCE($2, department),
+          quantity = COALESCE($3, quantity),
+          requires_painting = COALESCE($4, requires_painting),
+          deadline = COALESCE($5, deadline),
+          assigned_employee_id = COALESCE($6, assigned_employee_id),
+          stage = COALESCE($7, stage),
+          updated_at = NOW()
+      WHERE id = $8
+      RETURNING *
+    `
+    const res = await query(updateSql, [
+      item_description || null,
+      department || null,
+      quantity !== undefined ? Number(quantity) : null,
+      requires_painting !== undefined ? Boolean(requires_painting) : null,
+      deadline || null,
+      assigned_employee_id || null,
+      stage || null,
+      id
+    ])
+
+    if (res.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, data: res.rows[0] })
+  } catch (error: any) {
+    console.error('Error in PUT /api/production/orders:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/production/orders - Delete order
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 })
+    }
+
+    await query('DELETE FROM production_order_history WHERE order_id = $1', [id])
+    await query('DELETE FROM production_orders WHERE id = $1', [id])
+
+    return NextResponse.json({ success: true, message: 'Production order deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/production/orders:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+

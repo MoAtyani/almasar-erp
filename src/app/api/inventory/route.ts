@@ -135,3 +135,119 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
+
+// PUT /api/inventory - Edit item or assign to user for a project
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const id = body.id || body.item_id
+    const action = body.action || 'edit'
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Item ID is required' }, { status: 400 })
+    }
+
+    if (action === 'assign_to_project_user') {
+      const { quantity, project_id, assigned_user_id, notes } = body
+      const qtyNum = parseFloat(quantity)
+      if (!qtyNum || qtyNum <= 0) {
+        return NextResponse.json({ success: false, error: 'Valid quantity required' }, { status: 400 })
+      }
+
+      const itemRes = await query('SELECT * FROM inventory_items WHERE id = $1', [id])
+      if (itemRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 })
+      }
+      const item = itemRes.rows[0]
+      const currentQty = parseFloat(item.qty_on_hand)
+      if (currentQty < qtyNum) {
+        return NextResponse.json({ success: false, error: 'Insufficient stock in warehouse' }, { status: 400 })
+      }
+
+      const newQty = currentQty - qtyNum
+      await query('UPDATE inventory_items SET qty_on_hand = $1, updated_at = NOW() WHERE id = $2', [newQty, id])
+
+      // Record in stock ledger
+      await query(`
+        INSERT INTO stock_ledger (item_id, transaction_type, quantity_change, balance_before, balance_after, project_id, notes, created_by)
+        VALUES ($1, 'goods_issued', $2, $3, $4, $5, $6, $7)
+      `, [id, -qtyNum, currentQty, newQty, project_id || null, notes || 'Issued to technician for project', assigned_user_id || null])
+
+      return NextResponse.json({ success: true, message: `Successfully assigned ${qtyNum} units to project`, balance: newQty })
+    }
+
+    // Default: Edit Item
+    const {
+      sku,
+      description,
+      description_ar,
+      category,
+      uom,
+      purchase_cost,
+      reorder_threshold,
+      warehouse_location,
+      supplier_name,
+      qty_on_hand
+    } = body
+
+    const updateSql = `
+      UPDATE inventory_items
+      SET sku = COALESCE($1, sku),
+          description = COALESCE($2, description),
+          description_ar = COALESCE($3, description_ar),
+          category = COALESCE($4, category),
+          uom = COALESCE($5, uom),
+          purchase_cost = COALESCE($6, purchase_cost),
+          reorder_threshold = COALESCE($7, reorder_threshold),
+          warehouse_location = COALESCE($8, warehouse_location),
+          supplier_name = COALESCE($9, supplier_name),
+          qty_on_hand = COALESCE($10, qty_on_hand),
+          updated_at = NOW()
+      WHERE id = $11
+      RETURNING *
+    `
+    const res = await query(updateSql, [
+      sku || null,
+      description || null,
+      description_ar || null,
+      category || null,
+      uom || null,
+      purchase_cost !== undefined ? Number(purchase_cost) : null,
+      reorder_threshold !== undefined ? Number(reorder_threshold) : null,
+      warehouse_location || null,
+      supplier_name || null,
+      qty_on_hand !== undefined ? Number(qty_on_hand) : null,
+      id
+    ])
+
+    if (res.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, data: res.rows[0] })
+  } catch (error: any) {
+    console.error('Error in PUT /api/inventory:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/inventory - Delete item
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Item ID is required' }, { status: 400 })
+    }
+
+    await query('DELETE FROM stock_ledger WHERE item_id = $1', [id])
+    await query('DELETE FROM purchase_order_lines WHERE item_id = $1', [id])
+    await query('DELETE FROM inventory_items WHERE id = $1', [id])
+
+    return NextResponse.json({ success: true, message: 'Item deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/inventory:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+

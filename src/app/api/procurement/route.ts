@@ -20,7 +20,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, data: res.rows })
     }
 
-    // Default: purchase orders
+    if (view === 'project_costs') {
+      const res = await query(`
+        SELECT 
+          p.id as project_id, p.reference as project_reference, p.name as project_name,
+          p.customer_name, p.quotation_amount,
+          COALESCE(SUM(po.total_amount), 0) as total_procurement_cost,
+          COUNT(po.id) as po_count,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'po_id', po.id,
+                'po_number', po.po_number,
+                'supplier_name', po.supplier_name,
+                'amount', po.total_amount,
+                'status', po.status
+              )
+            ) FILTER (WHERE po.id IS NOT NULL), '[]'
+          ) as orders
+        FROM panel_projects p
+        LEFT JOIN purchase_orders po ON po.project_id = p.id
+        GROUP BY p.id, p.reference, p.name, p.customer_name, p.quotation_amount
+        ORDER BY total_procurement_cost DESC
+      `)
+      return NextResponse.json({ success: true, data: res.rows })
+    }
+
+    // Default: purchase orders with lines
     const res = await query(`
       SELECT po.*, 
         COALESCE(po.po_number, 'PO-2026-0001') as reference,
@@ -35,6 +61,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, data: res.rows })
   } catch (error: any) {
     console.error('Error in GET /api/procurement:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/procurement
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'PO ID is required' }, { status: 400 })
+    }
+    await query('DELETE FROM purchase_order_lines WHERE po_id = $1', [id])
+    await query('DELETE FROM purchase_orders WHERE id = $1', [id])
+    return NextResponse.json({ success: true, message: 'Purchase order deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/procurement:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }

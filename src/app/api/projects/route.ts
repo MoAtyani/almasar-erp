@@ -200,3 +200,92 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
+
+// PUT /api/projects - Full Project Edit
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const {
+      id,
+      name,
+      customer_name,
+      customer_email,
+      customer_phone,
+      location,
+      date_start,
+      date_delivery,
+      description,
+      quotation_amount,
+      priority,
+      state
+    } = body
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Project ID is required' }, { status: 400 })
+    }
+
+    const updateSql = `
+      UPDATE panel_projects
+      SET name = COALESCE($1, name),
+          customer_name = COALESCE($2, customer_name),
+          customer_email = COALESCE($3, customer_email),
+          customer_phone = COALESCE($4, customer_phone),
+          location = COALESCE($5, location),
+          date_start = COALESCE($6, date_start),
+          date_delivery = COALESCE($7, date_delivery),
+          description = COALESCE($8, description),
+          quotation_amount = COALESCE($9, quotation_amount),
+          priority = COALESCE($10, priority),
+          state = COALESCE($11, state),
+          updated_at = NOW()
+      WHERE id = $12
+      RETURNING *
+    `
+    const res = await query(updateSql, [
+      name || null,
+      customer_name || null,
+      customer_email || null,
+      customer_phone || null,
+      location || null,
+      date_start || null,
+      date_delivery || null,
+      description || null,
+      quotation_amount !== undefined ? Number(quotation_amount) : null,
+      priority || null,
+      state || null,
+      id
+    ])
+
+    if (res.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, data: res.rows[0] })
+  } catch (error: any) {
+    console.error('Error in PUT /api/projects:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/projects - Delete project and clean up relations
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Project ID is required' }, { status: 400 })
+    }
+
+    // Clean up dependencies
+    await query('DELETE FROM technician_tasks WHERE project_id = $1', [id])
+    await query('DELETE FROM production_orders WHERE project_id = $1', [id])
+    await query('DELETE FROM purchase_orders WHERE project_id = $1', [id])
+    await query('DELETE FROM panel_projects WHERE id = $1', [id])
+
+    return NextResponse.json({ success: true, message: 'Project deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/projects:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+

@@ -194,3 +194,77 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
+
+// PUT /api/tasks - Edit Task
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const {
+      id,
+      title,
+      description,
+      department,
+      priority,
+      estimated_hours,
+      assigned_employee_id,
+      status
+    } = body
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Task ID is required' }, { status: 400 })
+    }
+
+    const updateSql = `
+      UPDATE technician_tasks
+      SET title = COALESCE($1, title),
+          description = COALESCE($2, description),
+          department = COALESCE($3, department),
+          priority = COALESCE($4, priority),
+          estimated_hours = COALESCE($5, estimated_hours),
+          assigned_employee_id = COALESCE($6, assigned_employee_id),
+          status = COALESCE($7, status),
+          updated_at = NOW()
+      WHERE id = $8
+      RETURNING *
+    `
+    const res = await query(updateSql, [
+      title || null,
+      description || null,
+      department || null,
+      priority || null,
+      estimated_hours !== undefined ? Number(estimated_hours) : null,
+      assigned_employee_id || null,
+      status || null,
+      id
+    ])
+
+    if (res.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, data: res.rows[0] })
+  } catch (error: any) {
+    console.error('Error in PUT /api/tasks:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/tasks - Delete Task
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Task ID is required' }, { status: 400 })
+    }
+
+    await query('DELETE FROM time_logs WHERE task_id = $1', [id])
+    await query('DELETE FROM technician_tasks WHERE id = $1', [id])
+
+    return NextResponse.json({ success: true, message: 'Task deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/tasks:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+

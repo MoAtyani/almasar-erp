@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 
+function normalizeRole(role?: string): string {
+  const map: Record<string, string> = {
+    design_engineer: 'designer',
+    production_supervisor: 'production_manager',
+    supervisor: 'production_manager',
+    qc_technician: 'qc_inspector',
+    inventory_clerk: 'warehouse_officer',
+    sales: 'sales_officer',
+    hr: 'hr_officer',
+    finance: 'finance_officer',
+    general_manager: 'company_owner'
+  }
+  const clean = role ? role.toLowerCase() : 'technician'
+  return map[clean] || clean
+}
+
 // GET /api/hr
 export async function GET(req: NextRequest) {
   try {
@@ -124,9 +140,178 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: res.rows[0] })
     }
 
+    if (action === 'create_user' || action === 'create_employee') {
+      const {
+        full_name,
+        full_name_ar,
+        email,
+        phone,
+        role: rawRole = 'technician',
+        department = 'Production',
+        job_title = 'Technician',
+        basic_salary = 4500,
+        housing_allowance = 1000,
+        transport_allowance = 500
+      } = body
+
+      const role = normalizeRole(rawRole)
+
+      if (!full_name || !email) {
+        return NextResponse.json({ success: false, error: 'Full name and email are required' }, { status: 400 })
+      }
+
+      const userCode = `EMP-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`
+
+      // Create Profile
+      const profRes = await query(`
+        INSERT INTO profiles (user_code, full_name, full_name_ar, email, role, department, phone, is_active, reward_points)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, true, 100)
+        RETURNING *
+      `, [userCode, full_name, full_name_ar || full_name, email, role, department, phone || null])
+      const prof = profRes.rows[0]
+
+      // Create Employee Record
+      let empRecord = null
+      try {
+        const empRes = await query(`
+          INSERT INTO employees (
+            profile_id, employee_code, full_name, full_name_ar, department, job_title,
+            employment_status
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'active')
+          RETURNING *
+        `, [prof.id, userCode, full_name, full_name_ar || full_name, department, job_title])
+        empRecord = empRes.rows[0]
+      } catch (e: any) {
+        console.warn('Employee record creation warning:', e.message)
+      }
+
+      return NextResponse.json({ success: true, data: prof, profile: prof, employee: empRecord })
+    }
+
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 })
   } catch (error: any) {
     console.error('Error in POST /api/hr:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
+
+// PUT /api/hr - Edit User / Employee
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const {
+      id,
+      profile_id,
+      full_name,
+      full_name_ar,
+      email,
+      phone,
+      role,
+      department,
+      job_title,
+      basic_salary,
+      housing_allowance,
+      transport_allowance,
+      employment_status,
+      is_active
+    } = body
+
+    let targetProfId = profile_id || id
+    let targetEmpId = id
+
+    const profCheck = await query('SELECT id FROM profiles WHERE id = $1', [targetProfId])
+    if (profCheck.rows.length === 0) {
+      const empCheck = await query('SELECT profile_id FROM employees WHERE id = $1', [id])
+      if (empCheck.rows.length > 0) targetProfId = empCheck.rows[0].profile_id
+    }
+
+    if (targetProfId) {
+      await query(`
+        UPDATE profiles
+        SET full_name = COALESCE($1, full_name),
+            full_name_ar = COALESCE($2, full_name_ar),
+            email = COALESCE($3, email),
+            phone = COALESCE($4, phone),
+            role = COALESCE($5, role),
+            department = COALESCE($6, department),
+            is_active = COALESCE($7, is_active),
+            updated_at = NOW()
+        WHERE id = $8
+      `, [
+        full_name || null,
+        full_name_ar || null,
+        email || null,
+        phone || null,
+        role ? normalizeRole(role) : null,
+        department || null,
+        is_active !== undefined ? Boolean(is_active) : null,
+        targetProfId
+      ])
+    }
+
+    if (targetEmpId) {
+      try {
+        await query(`
+          UPDATE employees
+          SET full_name = COALESCE($1, full_name),
+              full_name_ar = COALESCE($2, full_name_ar),
+              department = COALESCE($3, department),
+              job_title = COALESCE($4, job_title),
+              employment_status = COALESCE($5, employment_status)
+          WHERE id = $6 OR profile_id = $6
+        `, [
+          full_name || null,
+          full_name_ar || null,
+          department || null,
+          job_title || null,
+          employment_status || null,
+          targetEmpId
+        ])
+      } catch (e: any) {
+        console.warn('Employee record update warning:', e.message)
+      }
+    }
+
+    return NextResponse.json({ success: true, message: 'User updated successfully' })
+  } catch (error: any) {
+    console.error('Error in PUT /api/hr:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/hr - Delete User / Employee
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    const profileId = searchParams.get('profile_id')
+
+    if (!id && !profileId) {
+      return NextResponse.json({ success: false, error: 'Employee ID or Profile ID is required' }, { status: 400 })
+    }
+
+    if (id) {
+      const empRes = await query('SELECT profile_id FROM employees WHERE id = $1', [id])
+      const profId = empRes.rows.length > 0 ? empRes.rows[0].profile_id : null
+
+      await query('DELETE FROM attendance_logs WHERE employee_id = $1', [id])
+      await query('DELETE FROM leave_requests WHERE employee_id = $1', [id])
+      await query('DELETE FROM employee_salaries WHERE employee_id = $1', [id])
+      await query('DELETE FROM employee_advances WHERE employee_id = $1', [id])
+      await query('DELETE FROM employees WHERE id = $1', [id])
+
+      if (profId) {
+        await query('DELETE FROM profiles WHERE id = $1', [profId])
+      }
+    } else if (profileId) {
+      await query('DELETE FROM employees WHERE profile_id = $1', [profileId])
+      await query('DELETE FROM profiles WHERE id = $1', [profileId])
+    }
+
+    return NextResponse.json({ success: true, message: 'User deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/hr:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
