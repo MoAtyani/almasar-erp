@@ -29,7 +29,10 @@ export default {
             (SELECT COUNT(*) FROM panel_projects) as projects_count,
             (SELECT COUNT(*) FROM profiles) as users_count,
             (SELECT COUNT(*) FROM production_orders) as orders_count,
-            (SELECT COUNT(*) FROM inventory_items) as items_count
+            (SELECT COUNT(*) FROM inventory_items) as items_count,
+            (SELECT COUNT(*) FROM purchase_orders) as procurement_count,
+            (SELECT COUNT(*) FROM technician_tasks) as tasks_count,
+            (SELECT COUNT(*) FROM crm_leads) as crm_count
         `).first();
 
         if (!wantsJson) {
@@ -601,6 +604,12 @@ export default {
         }
       }
 
+      // 9. CRM Leads API
+      if (pathname === '/api/crm') {
+        const res = await env.DB.prepare('SELECT * FROM crm_leads ORDER BY created_at DESC').all();
+        return Response.json({ success: true, leads: res.results }, { headers: corsHeaders });
+      }
+
       // 404 for unknown endpoints
       return Response.json({ success: false, error: 'Endpoint not found' }, { headers: corsHeaders, status: 404 });
     } catch (error: any) {
@@ -611,15 +620,20 @@ export default {
 
 function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): string {
   const pCount = stats?.projects_count || 15;
-  const uCount = stats?.users_count || 27;
-  const oCount = stats?.orders_count || 0;
-  const iCount = stats?.items_count || 6;
+  const uCount = stats?.users_count || 31;
+  const oCount = stats?.orders_count || 6;
+  const iCount = stats?.items_count || 57;
+  const procCount = stats?.procurement_count || 11;
+  const tCount = stats?.tasks_count || 43;
+  const crmCount = stats?.crm_count || 44;
 
   // Determine active section based on initial route
   let activeTab = 'dashboard';
   if (initialRoute.includes('project')) activeTab = 'projects';
   else if (initialRoute.includes('user') || initialRoute.includes('hr')) activeTab = 'hr';
   else if (initialRoute.includes('inventory') || initialRoute.includes('warehouse')) activeTab = 'warehouse';
+  else if (initialRoute.includes('procurement')) activeTab = 'procurement';
+  else if (initialRoute.includes('task')) activeTab = 'tasks';
   else if (initialRoute.includes('crm')) activeTab = 'crm';
   else if (initialRoute.includes('production')) activeTab = 'production';
   else if (initialRoute.includes('qc')) activeTab = 'qc';
@@ -1354,6 +1368,125 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
         </div>
       </div>
 
+      <!-- VIEW: PROCUREMENT -->
+      <div id="view-procurement" class="view-container ${activeTab === 'procurement' ? 'active' : ''}">
+        <div class="panel-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700; color: #fff;">أوامر الشراء والمشتريات (${procCount})</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">سجل طلبات التوريد المباشرة للمشاريع من Cloudflare D1</p>
+            </div>
+            <button class="btn-top" onclick="fetchProcurement()">↻ تحديث</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>رقم أمر الشراء</th>
+                  <th>المورد</th>
+                  <th>تاريخ الإصدار</th>
+                  <th>إجمالي المبلغ</th>
+                  <th>المشروع المرتبط</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody id="procTbody">
+                <tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">جاري تحميل المشتريات...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: TASKS -->
+      <div id="view-tasks" class="view-container ${activeTab === 'tasks' ? 'active' : ''}">
+        <div class="panel-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700; color: #fff;">مهام الفنيين ومسار العمل (${tCount})</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">تتبع إنجاز المهام في خطوط الإنتاج من Cloudflare D1</p>
+            </div>
+            <button class="btn-top" onclick="fetchTasks()">↻ تحديث</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>عنوان المهمة</th>
+                  <th>القسم</th>
+                  <th>المشروع</th>
+                  <th>الفني المكلف</th>
+                  <th>الأولوية</th>
+                  <th>حالة المسار</th>
+                </tr>
+              </thead>
+              <tbody id="tasksTbody">
+                <tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">جاري تحميل المهام...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: PRODUCTION -->
+      <div id="view-production" class="view-container ${activeTab === 'production' ? 'active' : ''}">
+        <div class="panel-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700; color: #fff;">أوامر التصنيع والمراحل (${oCount})</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">خطوط التصنيع وقص النحاس والتجميع من Cloudflare D1</p>
+            </div>
+            <button class="btn-top" onclick="fetchProduction()">↻ تحديث</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>رقم أمر التصنيع</th>
+                  <th>اسم اللوحة</th>
+                  <th>القسم</th>
+                  <th>المرحلة الحالية</th>
+                  <th>الكمية</th>
+                  <th>الدهان الحراري</th>
+                </tr>
+              </thead>
+              <tbody id="prodTbody">
+                <tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">جاري تحميل أوامر التصنيع...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: CRM -->
+      <div id="view-crm" class="view-container ${activeTab === 'crm' ? 'active' : ''}">
+        <div class="panel-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700; color: #fff;">المبيعات والفرص البيعية CRM (${crmCount})</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">العملاء والمشاريع قيد التسعير من Cloudflare D1</p>
+            </div>
+            <button class="btn-top" onclick="fetchCrm()">↻ تحديث</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>الفرصة / اللوحة</th>
+                  <th>العميل / الشركة</th>
+                  <th>الموقع</th>
+                  <th>القيمة المتوقعة</th>
+                  <th>المرحلة</th>
+                </tr>
+              </thead>
+              <tbody id="crmTbody">
+                <tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted);">جاري تحميل العملاء والفرص...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- VIEW: OTHER PLACEHOLDERS -->
       <div id="view-generic" class="view-container">
         <div class="panel-card" style="text-align: center; padding: 60px 20px;">
@@ -1476,10 +1609,26 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
         document.getElementById('view-projects').classList.add('active');
         document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'مشاريع لوحات التوزيع' : 'Panel Projects Management';
         fetchProjects();
+      } else if (target === 'procurement') {
+        document.getElementById('view-procurement').classList.add('active');
+        document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'أوامر الشراء والمشتريات' : 'Procurement & Purchase Orders';
+        fetchProcurement();
+      } else if (target === 'tasks') {
+        document.getElementById('view-tasks').classList.add('active');
+        document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'مهام الفنيين ومسار العمل' : 'Technician Tasks & Workflow';
+        fetchTasks();
       } else if (target === 'warehouse') {
         document.getElementById('view-warehouse').classList.add('active');
         document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'المستودع والمخزون' : 'Warehouse & Stock Inventory';
         fetchInventory();
+      } else if (target === 'production') {
+        document.getElementById('view-production').classList.add('active');
+        document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'أوامر التصنيع والمراحل' : 'Production Orders & MRP';
+        fetchProduction();
+      } else if (target === 'crm') {
+        document.getElementById('view-crm').classList.add('active');
+        document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'المبيعات / CRM' : 'Sales & CRM Leads';
+        fetchCrm();
       } else if (target === 'hr') {
         document.getElementById('view-hr').classList.add('active');
         document.getElementById('pageTitleTxt').innerText = currentLang === 'ar' ? 'الموارد البشرية والمستخدمون' : 'HR & Team Profiles';
@@ -1488,11 +1637,7 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
         const gen = document.getElementById('view-generic');
         gen.classList.add('active');
         const titles = {
-          crm: currentLang === 'ar' ? 'المبيعات / CRM' : 'Sales / CRM',
           engineering: currentLang === 'ar' ? 'الهندسة والمخططات' : 'Engineering',
-          tasks: currentLang === 'ar' ? 'المهام والإنتاج' : 'Tasks & Work Orders',
-          procurement: currentLang === 'ar' ? 'المشتريات والموردين' : 'Procurement',
-          production: currentLang === 'ar' ? 'الإنتاج وتخطيط المواد (MRP)' : 'Production (MRP)',
           qc: currentLang === 'ar' ? 'ضبط الجودة وفحص FAT' : 'Quality Control & FAT',
           logistics: currentLang === 'ar' ? 'اللوجستيات والشحن' : 'Logistics',
           accounting: currentLang === 'ar' ? 'الفواتير والمحاسبة' : 'Invoicing & Accounting',
@@ -1575,9 +1720,105 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
       }
     }
 
+    async function fetchProcurement() {
+      const tbody = document.getElementById('procTbody');
+      try {
+        const res = await fetch('/api/procurement');
+        const json = await res.json();
+        if (json.success && json.orders) {
+          tbody.innerHTML = json.orders.map(o => \`
+            <tr>
+              <td><strong style="color: var(--cyan);">\${o.po_number}</strong></td>
+              <td><strong>\${o.supplier_name || '—'}</strong></td>
+              <td>\${o.date_issue ? o.date_issue.substring(0, 10) : '—'}</td>
+              <td><strong style="color: var(--gold);">\${Number(o.total_amount || 0).toLocaleString()} SAR</strong></td>
+              <td>\${o.project_name || '—'}</td>
+              <td><span class="badge badge-done">\${o.status || 'draft'}</span></td>
+            </tr>
+          \`).join('');
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#ef4444;text-align:center;">تعذر تحميل المشتريات</td></tr>';
+      }
+    }
+
+    async function fetchTasks() {
+      const tbody = document.getElementById('tasksTbody');
+      try {
+        const res = await fetch('/api/tasks');
+        const json = await res.json();
+        if (json.success && json.tasks) {
+          tbody.innerHTML = json.tasks.map(t => {
+            const isDone = t.status === 'completed' || t.status === 'verified';
+            const isProg = t.status === 'in_progress';
+            const badgeClass = isDone ? 'badge-done' : (isProg ? 'badge-prog' : 'badge-new');
+            return \`
+              <tr>
+                <td><strong>\${t.title}</strong></td>
+                <td>\${t.department || '—'}</td>
+                <td><span style="color: var(--gold);">\${t.project_name || '—'}</span></td>
+                <td>\${t.assigned_employee_name || t.assigned_to || 'فني المصنع'}</td>
+                <td><span class="badge \${t.priority === 'urgent' ? 'badge-prog' : 'badge-done'}">\${t.priority || 'medium'}</span></td>
+                <td><span class="badge \${badgeClass}">\${t.status || 'assigned'}</span></td>
+              </tr>
+            \`;
+          }).join('');
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#ef4444;text-align:center;">تعذر تحميل المهام</td></tr>';
+      }
+    }
+
+    async function fetchProduction() {
+      const tbody = document.getElementById('prodTbody');
+      try {
+        const res = await fetch('/api/production/orders');
+        const json = await res.json();
+        if (json.success && json.orders) {
+          tbody.innerHTML = json.orders.map(o => \`
+            <tr>
+              <td><strong style="color: var(--gold);">\${o.order_number}</strong></td>
+              <td><strong>\${o.panel_name || '—'}</strong></td>
+              <td>\${o.department || '—'}</td>
+              <td><span class="badge badge-prog">\${o.stage || 'cut'}</span></td>
+              <td>\${o.quantity || 1}</td>
+              <td>\${o.requires_painting ? '✅ نعم' : '❌ لا'}</td>
+            </tr>
+          \`).join('');
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#ef4444;text-align:center;">تعذر تحميل أوامر التصنيع</td></tr>';
+      }
+    }
+
+    async function fetchCrm() {
+      const tbody = document.getElementById('crmTbody');
+      try {
+        const res = await fetch('/api/crm');
+        const json = await res.json();
+        if (json.success && json.leads) {
+          tbody.innerHTML = json.leads.map(l => \`
+            <tr>
+              <td><strong>\${l.title || 'لوحة توزيع'}</strong></td>
+              <td>\${l.company_name || l.contact_name || '—'}</td>
+              <td>\${l.location || 'KSA'}</td>
+              <td><strong style="color: var(--emerald);">\${Number(l.estimated_value || 0).toLocaleString()} SAR</strong></td>
+              <td><span class="badge badge-prog">\${l.stage || 'lead'}</span></td>
+            </tr>
+          \`).join('');
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;text-align:center;">تعذر تحميل المبيعات</td></tr>';
+      }
+    }
+
     // Auto-fetch if starting on subview
     if ('${activeTab}' === 'projects') fetchProjects();
+    if ('${activeTab}' === 'procurement') fetchProcurement();
+    if ('${activeTab}' === 'tasks') fetchTasks();
     if ('${activeTab}' === 'warehouse') fetchInventory();
+    if ('${activeTab}' === 'production') fetchProduction();
+    if ('${activeTab}' === 'crm') fetchCrm();
     if ('${activeTab}' === 'hr') fetchUsers();
   </script>
 </body>
