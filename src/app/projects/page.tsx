@@ -29,11 +29,14 @@ export default function ProjectsPage() {
       const url = `/api/projects?state=${filterState}&search=${encodeURIComponent(search)}`
       const res = await fetch(url)
       const data = await res.json()
-      if (data.success) {
+      if (data && data.success && Array.isArray(data.data)) {
         setProjects(data.data)
+      } else {
+        setProjects([])
       }
     } catch (err) {
       console.error('Failed to load projects:', err)
+      setProjects([])
     } finally {
       setLoading(false)
     }
@@ -141,9 +144,14 @@ export default function ProjectsPage() {
               onChange={e => setFilterState(e.target.value as any)}
             >
               <option value="all">{isRtl ? 'جميع المراحل (10)' : 'All Stages (10)'}</option>
-              {STATES.map(s => (
-                <option key={s} value={s}>{PROJECT_STATE_LABELS[s][lang] || PROJECT_STATE_LABELS[s].en}</option>
-              ))}
+              {STATES.map(s => {
+                const sLabel = PROJECT_STATE_LABELS[s]
+                return (
+                  <option key={s} value={s}>
+                    {sLabel ? (sLabel[lang] || sLabel.en) : s}
+                  </option>
+                )
+              })}
             </select>
           </div>
         </div>
@@ -151,10 +159,27 @@ export default function ProjectsPage() {
 
       {/* Projects List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {filtered.map(proj => {
-          const stateInfo = PROJECT_STATE_LABELS[proj.state]
+        {loading && (
+          <div className="card" style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>
+            {isRtl ? 'جاري تحميل المشاريع...' : 'Loading projects...'}
+          </div>
+        )}
+
+        {!loading && filtered.length === 0 && (
+          <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>📁</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{isRtl ? 'لا توجد مشاريع مطابقة للبحث' : 'No projects found'}</div>
+          </div>
+        )}
+
+        {!loading && filtered.map(proj => {
+          const stateInfo = PROJECT_STATE_LABELS[proj.state] || {
+            en: proj.state || 'New',
+            ar: proj.state === 'new' ? 'مشروع جديد' : (proj.state || 'جديد'),
+            color: '#8b5cf6'
+          }
           const nextState = projectStateFlow(proj.state)
-          const nextStateInfo = nextState ? PROJECT_STATE_LABELS[nextState] : null
+          const nextStateInfo = nextState ? (PROJECT_STATE_LABELS[nextState] || { en: nextState, ar: nextState }) : null
 
           return (
             <div key={proj.id} className="card" style={{ padding: 20 }}>
@@ -165,12 +190,12 @@ export default function ProjectsPage() {
                     <span
                       className="state-pill"
                       style={{
-                        background: stateInfo?.color + '22',
-                        color: stateInfo?.color,
-                        border: `1px solid ${stateInfo?.color}55`
+                        background: (stateInfo?.color || '#8b5cf6') + '22',
+                        color: stateInfo?.color || '#8b5cf6',
+                        border: `1px solid ${(stateInfo?.color || '#8b5cf6')}55`
                       }}
                     >
-                      {stateInfo[lang] || stateInfo?.en || proj.state}
+                      {stateInfo?.[lang] || stateInfo?.en || proj.state || 'New'}
                     </span>
                     {proj.job_order_number && (
                       <span className="badge badge-subtle">{proj.job_order_number}</span>
@@ -208,7 +233,7 @@ export default function ProjectsPage() {
                       className="btn btn-sm btn-primary"
                       onClick={() => advanceState(proj)}
                     >
-                      {isRtl ? `نقل للمرحلة: ${nextStateInfo?.ar} ←` : `Advance: ${nextStateInfo?.en} →`}
+                      {isRtl ? `نقل للمرحلة: ${nextStateInfo?.ar || nextState} ←` : `Advance: ${nextStateInfo?.en || nextState} →`}
                     </button>
                   )}
                 </div>

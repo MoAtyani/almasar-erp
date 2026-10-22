@@ -7,7 +7,7 @@ export type UserRole =
   | 'technician'
 
 export type ProjectState = 
-  | 'draft' | 'estimation' | 'design' | 'procurement'
+  | 'new' | 'planning' | 'draft' | 'estimation' | 'design' | 'procurement'
   | 'warehouse' | 'production' | 'qc' | 'accounting' | 'logistics' | 'done'
 
 export type TaskState = 'pending' | 'in_progress' | 'done'

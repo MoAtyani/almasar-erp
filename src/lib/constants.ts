@@ -3,6 +3,8 @@ import { ProjectState, TaskState, LeadState, PoState, TransferState, MrpState, Q
 // ── Labels ────────────────────────────────────────────────
 
 export const PROJECT_STATE_LABELS: Record<ProjectState, { en: string; ar: string; color: string }> = {
+  new:          { en: 'New Project',           ar: 'مشروع جديد',        color: '#8b5cf6' },
+  planning:     { en: 'Production Planning',   ar: 'تخطيط الإنتاج',     color: '#06b6d4' },
   draft:        { en: 'Draft',                 ar: 'مسودة',             color: '#6b7280' },
   estimation:   { en: 'Estimation',            ar: 'التخمين',           color: '#8b5cf6' },
   design:       { en: 'Engineering / Design',  ar: 'الهندسة / التصميم', color: '#3b82f6' },
@@ -111,7 +113,13 @@ export const DOC_CATEGORY_LABELS: Record<string, { en: string; ar: string; icon:
 
 export function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  } catch {
+    return '—'
+  }
 }
 
 export function formatCurrency(amount: number): string {
@@ -119,8 +127,8 @@ export function formatCurrency(amount: number): string {
 }
 
 export function projectStateFlow(current: ProjectState): ProjectState | null {
-  const flow: ProjectState[] = ['draft','estimation','design','procurement','warehouse','production','qc','accounting','logistics','done']
+  const flow: ProjectState[] = ['new', 'planning', 'draft', 'estimation', 'design', 'procurement', 'warehouse', 'production', 'qc', 'accounting', 'logistics', 'done']
   const idx = flow.indexOf(current)
-  return idx < flow.length - 1 ? flow[idx + 1] : null
+  return idx !== -1 && idx < flow.length - 1 ? flow[idx + 1] : null
 }
 
