@@ -63,7 +63,14 @@ export async function POST(req: NextRequest) {
       planned_start,
       deadline,
       assigned_employee_id,
-      user_id
+      user_id,
+      cover_type = 'standard',
+      receipt_status = 'receiving',
+      is_new_type = false,
+      required_measurement = '',
+      fixed_measurements = '',
+      cable_tray_bend = '',
+      details_notes = ''
     } = body
 
     if (!project_id || !department || !item_description) {
@@ -72,30 +79,50 @@ export async function POST(req: NextRequest) {
 
     const countRes = await query('SELECT COUNT(*) FROM production_orders WHERE department = $1', [department])
     const count = parseInt(countRes.rows[0].count, 10) + 1
-    const deptPrefix = department === 'factory_a' ? 'FA' : department === 'factory_b' ? 'FB' : 'EL'
+    
+    let deptPrefix = 'ORD'
+    if (department === 'factory_a') deptPrefix = 'FA'
+    else if (department === 'factory_b') deptPrefix = 'FB'
+    else if (department === 'electrical') deptPrefix = 'EL'
+    else if (department === 'casting') deptPrefix = 'CAST'
+    else if (department === 'laser') deptPrefix = 'LAS'
+    else if (department === 'painting') deptPrefix = 'PNT'
+
     const orderNumber = `ORD-${deptPrefix}-2026-${String(count).padStart(3, '0')}`
+
+    const initialStage = department === 'casting' ? (receipt_status === 'completed' ? 'completed' : 'receiving')
+      : department === 'laser' ? 'awaiting_materials'
+      : department === 'painting' ? 'receiving'
+      : 'awaiting_acceptance'
 
     const insertSql = `
       INSERT INTO production_orders (
         order_number, project_id, department, item_description, quantity,
         requires_painting, planned_start, deadline, assigned_employee_id,
-        stage, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'awaiting_acceptance', $10)
+        stage, created_by, cover_type, receipt_status, is_new_type,
+        required_measurement, fixed_measurements, cable_tray_bend, details_notes, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `
     const res = await query(insertSql, [
       orderNumber, project_id, department, item_description, quantity,
       requires_painting, planned_start || null, deadline || null,
-      assigned_employee_id || null, user_id || null
+      assigned_employee_id || null, initialStage, user_id || null,
+      cover_type, receipt_status, Boolean(is_new_type),
+      required_measurement, fixed_measurements, cable_tray_bend, details_notes, details_notes
     ])
 
     const order = res.rows[0]
 
     // Record initial status history
-    await query(`
-      INSERT INTO production_order_history (order_id, from_stage, to_stage, changed_by, comment)
-      VALUES ($1, NULL, 'awaiting_acceptance', $2, 'Order created and issued to department')
-    `, [order.id, user_id || null])
+    try {
+      await query(`
+        INSERT INTO production_order_history (order_id, from_stage, to_stage, changed_by, comment)
+        VALUES ($1, NULL, $2, $3, 'Order created and registered in department')
+      `, [order.id, initialStage, user_id || null])
+    } catch (e) {
+      // ignore history err
+    }
 
     return NextResponse.json({ success: true, data: order })
   } catch (error: any) {
@@ -104,14 +131,18 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/production/orders (Transition order stages, accept, start, complete, paint, QC)
+// PATCH /api/production/orders
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json()
-    const { id, action, user_id, comment, requires_painting, delay_reason, notes } = body
+    const {
+      id, action, user_id, comment, requires_painting, delay_reason, notes,
+      receipt_status, stage, cover_type, is_new_type, required_measurement,
+      fixed_measurements, cable_tray_bend, details_notes, quantity, deadline, item_description
+    } = body
 
-    if (!id || !action) {
-      return NextResponse.json({ success: false, error: 'Order ID and action are required' }, { status: 400 })
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 })
     }
 
     const currentRes = await query('SELECT * FROM production_orders WHERE id = $1', [id])
@@ -119,144 +150,118 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
     }
     const order = currentRes.rows[0]
-    const fromStage = order.stage
     let toStage = order.stage
-    let updateFields: string[] = ['updated_at = NOW()']
-    const params: any[] = []
+    const updateFields: string[] = ['updated_at = NOW()']
+    const params: any[] = [id]
 
-    switch (action) {
-      case 'accept':
-        toStage = 'accepted'
-        params.push(user_id || null)
-        updateFields.push(`accepted_at = NOW()`, `accepted_by = $${params.length}`, `stage = 'accepted'`)
-        break
-
-      case 'start_work':
-        toStage = 'in_progress'
-        updateFields.push(`actual_start = NOW()`, `stage = 'in_progress'`)
-        break
-
-      case 'complete_manufacturing':
-        toStage = 'manufacturing_complete'
-        updateFields.push(`actual_completion = NOW()`, `stage = 'manufacturing_complete'`)
-        break
-
-      case 'send_to_paint':
-        toStage = 'painting'
-        updateFields.push(`stage = 'painting'`, `paint_status = 'in_painting'`)
-        // Also queue in QC for paint inspection
-        await query(`
-          INSERT INTO qc_queue (inspection_number, department, order_id, project_id, status, notes)
-          VALUES ($1, 'painting', $2, $3, 'pending', 'Paint thickness, adhesion and color RAL inspection')
-        `, [`QC-PNT-${order.order_number}`, order.id, order.project_id])
-        break
-
-      case 'bypass_painting':
-        // Allowed when painting is optional or not required
-        toStage = 'ready_for_delivery'
-        updateFields.push(`stage = 'ready_for_delivery'`, `requires_painting = false`)
-        break
-
-      case 'mark_ready_delivery':
-        toStage = 'ready_for_delivery'
-        updateFields.push(`stage = 'ready_for_delivery'`)
-        break
-
-      case 'pack':
-        toStage = 'packed'
-        updateFields.push(`stage = 'packed'`)
-        break
-
-      case 'dispatch':
-        toStage = 'dispatched'
-        updateFields.push(`stage = 'dispatched'`)
-        break
-
-      case 'send_to_qc':
-        toStage = 'qc_inspection'
-        updateFields.push(`stage = 'qc_inspection'`)
-        // Queue in QC
-        await query(`
-          INSERT INTO qc_queue (inspection_number, department, order_id, project_id, status, notes)
-          VALUES ($1, $2, $3, $4, 'pending', 'Comprehensive electrical and dielectric FAT testing')
-        `, [`QC-${order.order_number}`, order.department, order.id, order.project_id])
-        break
-
-      case 'report_delay':
-        if (delay_reason) {
-          params.push(delay_reason)
-          updateFields.push(`delay_reason = $${params.length}`)
-        }
-        break
-
-      default:
-        return NextResponse.json({ success: false, error: `Invalid action: ${action}` }, { status: 400 })
+    // Casting department actions
+    if (action === 'update_casting_status') {
+      const nextReceipt = receipt_status || (order.receipt_status === 'receiving' ? 'completed' : 'receiving')
+      const nextStage = nextReceipt === 'completed' ? 'completed' : 'receiving'
+      params.push(nextReceipt)
+      updateFields.push(`receipt_status = $${params.length}`)
+      params.push(nextStage)
+      updateFields.push(`stage = $${params.length}`)
+      if (cover_type) {
+        params.push(cover_type)
+        updateFields.push(`cover_type = $${params.length}`)
+      }
+      if (notes) {
+        params.push(notes)
+        updateFields.push(`notes = $${params.length}`)
+      }
+    }
+    // Laser department actions
+    else if (action === 'update_laser_status') {
+      const nextStage = stage || (order.stage === 'awaiting_materials' ? 'material_inspection' : 'ready_for_delivery')
+      params.push(nextStage)
+      updateFields.push(`stage = $${params.length}`)
+      if (notes) {
+        params.push(notes)
+        updateFields.push(`notes = $${params.length}`)
+      }
+    }
+    // Painting department actions
+    else if (action === 'update_painting_status') {
+      const nextReceipt = receipt_status || (order.receipt_status === 'receiving' ? 'showroom_notified' : 'ready_for_delivery')
+      const nextStage = nextReceipt
+      params.push(nextReceipt)
+      updateFields.push(`receipt_status = $${params.length}`)
+      params.push(nextStage)
+      updateFields.push(`stage = $${params.length}`)
+      if (notes) {
+        params.push(notes)
+        updateFields.push(`notes = $${params.length}`)
+      }
+    }
+    // General Stage Transitions
+    else if (action === 'accept') {
+      toStage = 'accepted'
+      params.push(user_id || null)
+      updateFields.push(`accepted_at = NOW()`, `accepted_by = $${params.length}`, `stage = 'accepted'`)
+    } else if (action === 'start_work') {
+      toStage = 'in_progress'
+      updateFields.push(`actual_start = NOW()`, `stage = 'in_progress'`)
+    } else if (action === 'complete_manufacturing') {
+      toStage = 'manufacturing_complete'
+      updateFields.push(`actual_completion = NOW()`, `stage = 'manufacturing_complete'`)
+    } else if (action === 'mark_ready_delivery') {
+      toStage = 'ready_for_delivery'
+      updateFields.push(`stage = 'ready_for_delivery'`)
+    } else if (action === 'edit_order') {
+      if (item_description !== undefined) {
+        params.push(item_description)
+        updateFields.push(`item_description = $${params.length}`)
+      }
+      if (quantity !== undefined) {
+        params.push(quantity)
+        updateFields.push(`quantity = $${params.length}`)
+      }
+      if (deadline !== undefined) {
+        params.push(deadline || null)
+        updateFields.push(`deadline = $${params.length}`)
+      }
+      if (notes !== undefined) {
+        params.push(notes)
+        updateFields.push(`notes = $${params.length}`)
+      }
+      if (cover_type !== undefined) {
+        params.push(cover_type)
+        updateFields.push(`cover_type = $${params.length}`)
+      }
+      if (required_measurement !== undefined) {
+        params.push(required_measurement)
+        updateFields.push(`required_measurement = $${params.length}`)
+      }
+      if (fixed_measurements !== undefined) {
+        params.push(fixed_measurements)
+        updateFields.push(`fixed_measurements = $${params.length}`)
+      }
+      if (cable_tray_bend !== undefined) {
+        params.push(cable_tray_bend)
+        updateFields.push(`cable_tray_bend = $${params.length}`)
+      }
+      if (stage !== undefined) {
+        params.push(stage)
+        updateFields.push(`stage = $${params.length}`)
+      }
     }
 
-    params.push(id)
-    const sql = `UPDATE production_orders SET ${updateFields.join(', ')} WHERE id = $${params.length} RETURNING *`
-    const res = await query(sql, params)
-    const updated = res.rows[0]
-
-    // Record history
-    await query(`
-      INSERT INTO production_order_history (order_id, from_stage, to_stage, changed_by, comment)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [id, fromStage, toStage, user_id || null, comment || `Action: ${action}`])
-
-    return NextResponse.json({ success: true, data: updated })
+    const updateSql = `
+      UPDATE production_orders
+      SET ${updateFields.join(', ')}
+      WHERE id = $1
+      RETURNING *
+    `
+    const res = await query(updateSql, params)
+    return NextResponse.json({ success: true, data: res.rows[0] })
   } catch (error: any) {
     console.error('Error in PATCH /api/production/orders:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
 
-// PUT /api/production/orders - Edit order
-export async function PUT(req: NextRequest) {
-  try {
-    const body = await req.json()
-    const { id, item_description, department, quantity, requires_painting, deadline, assigned_employee_id, stage } = body
-
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 })
-    }
-
-    const updateSql = `
-      UPDATE production_orders
-      SET item_description = COALESCE($1, item_description),
-          department = COALESCE($2, department),
-          quantity = COALESCE($3, quantity),
-          requires_painting = COALESCE($4, requires_painting),
-          deadline = COALESCE($5, deadline),
-          assigned_employee_id = COALESCE($6, assigned_employee_id),
-          stage = COALESCE($7, stage),
-          updated_at = NOW()
-      WHERE id = $8
-      RETURNING *
-    `
-    const res = await query(updateSql, [
-      item_description || null,
-      department || null,
-      quantity !== undefined ? Number(quantity) : null,
-      requires_painting !== undefined ? Boolean(requires_painting) : null,
-      deadline || null,
-      assigned_employee_id || null,
-      stage || null,
-      id
-    ])
-
-    if (res.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
-    }
-
-    return NextResponse.json({ success: true, data: res.rows[0] })
-  } catch (error: any) {
-    console.error('Error in PUT /api/production/orders:', error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-  }
-}
-
-// DELETE /api/production/orders - Delete order
+// DELETE /api/production/orders
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -267,11 +272,9 @@ export async function DELETE(req: NextRequest) {
 
     await query('DELETE FROM production_order_history WHERE order_id = $1', [id])
     await query('DELETE FROM production_orders WHERE id = $1', [id])
-
-    return NextResponse.json({ success: true, message: 'Production order deleted successfully' })
+    return NextResponse.json({ success: true, message: 'Order deleted successfully' })
   } catch (error: any) {
     console.error('Error in DELETE /api/production/orders:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
-

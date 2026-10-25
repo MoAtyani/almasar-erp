@@ -604,10 +604,51 @@ export default {
         }
       }
 
-      // 9. CRM Leads API
-      if (pathname === '/api/crm') {
-        const res = await env.DB.prepare('SELECT * FROM crm_leads ORDER BY created_at DESC').all();
-        return Response.json({ success: true, leads: res.results }, { headers: corsHeaders });
+      // 9. CRM / Sales & Templates API
+      if (pathname === '/api/crm' || pathname === '/api/sales') {
+        const view = url.searchParams.get('view');
+        if (view === 'templates') {
+          const res = await env.DB.prepare('SELECT * FROM project_templates ORDER BY created_at ASC').all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'GET') {
+          const res = await env.DB.prepare('SELECT * FROM crm_leads ORDER BY created_at DESC').all();
+          return Response.json({ success: true, leads: res.results, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'PATCH') {
+          const body: any = await request.json();
+          await env.DB.prepare(`
+            UPDATE crm_leads
+            SET sales_status = COALESCE(?, sales_status),
+                outcome = COALESCE(?, outcome),
+                product_category = COALESCE(?, product_category),
+                name = COALESCE(?, name),
+                customer_name = COALESCE(?, customer_name),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(body.sales_status || null, body.outcome || null, body.product_category || null, body.name || null, body.customer_name || null, body.id).run();
+          return Response.json({ success: true }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const id = crypto.randomUUID();
+          const countRes = await env.DB.prepare('SELECT COUNT(*) as c FROM crm_leads').first();
+          const ref = `REF-2026-${String(Number(countRes?.c || 0) + 1).padStart(4, '0')}`;
+          await env.DB.prepare(`
+            INSERT INTO crm_leads (
+              id, reference, name, customer_name, company, expected_revenue,
+              product_category, outcome, sales_status, description, state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'won')
+          `).bind(
+            id, ref, body.name, body.customer_name || 'Customer', body.company || body.customer_name || '',
+            body.expected_revenue ? Number(body.expected_revenue) : 0,
+            body.product_category || 'electrical_panels',
+            body.outcome || 'won',
+            body.sales_status || 'under_manufacturing',
+            body.description || ''
+          ).run();
+          return Response.json({ success: true, data: { id, reference: ref, ...body } }, { headers: corsHeaders });
+        }
       }
 
       // 404 for unknown endpoints
@@ -1472,15 +1513,17 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
             <table>
               <thead>
                 <tr>
-                  <th>الفرصة / اللوحة</th>
+                  <th>الرقم المرجعي</th>
+                  <th>اسم المشروع</th>
                   <th>العميل / الشركة</th>
-                  <th>الموقع</th>
-                  <th>القيمة المتوقعة</th>
-                  <th>المرحلة</th>
+                  <th>القسم والتصنيف</th>
+                  <th>النتيجة</th>
+                  <th>الحالة</th>
+                  <th>القيمة</th>
                 </tr>
               </thead>
               <tbody id="crmTbody">
-                <tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted);">جاري تحميل العملاء والفرص...</td></tr>
+                <tr><td colspan="7" style="text-align: center; padding: 30px; color: var(--text-muted);">جاري تحميل مشاريع المبيعات والنماذج...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1797,18 +1840,35 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
         const res = await fetch('/api/crm');
         const json = await res.json();
         if (json.success && json.leads) {
-          tbody.innerHTML = json.leads.map(l => \`
-            <tr>
-              <td><strong>\${l.title || 'لوحة توزيع'}</strong></td>
-              <td>\${l.company_name || l.contact_name || '—'}</td>
-              <td>\${l.location || 'KSA'}</td>
-              <td><strong style="color: var(--emerald);">\${Number(l.estimated_value || 0).toLocaleString()} SAR</strong></td>
-              <td><span class="badge badge-prog">\${l.stage || 'lead'}</span></td>
-            </tr>
-          \`).join('');
+          const catMap = {
+            electrical_panels: '⚡ لوحات كهربائية',
+            cable_tray_enclosure: '📦 كابل تري وخزنه',
+            materials_parts: '🔩 مواد وقطع'
+          };
+          const statusMap = {
+            under_manufacturing: '⚙️ قيد التصنيع',
+            ready_for_delivery: '🚚 جاهز للتسليم',
+            delivered: '✅ تم التسليم'
+          };
+          tbody.innerHTML = json.leads.map(l => {
+            const cat = catMap[l.product_category] || '⚡ لوحات كهربائية';
+            const st = statusMap[l.sales_status] || '⚙️ قيد التصنيع';
+            const out = l.outcome === 'won' ? '✓ تم التعاقد / ناجح' : (l.outcome === 'in_progress' ? '⏳ جاري العمل' : 'معلق');
+            return \`
+              <tr>
+                <td><strong style="color: var(--gold);">\${l.reference || 'REF-2026'}</strong></td>
+                <td><strong>\${l.name || l.title}</strong></td>
+                <td>\${l.customer_name || l.company_name || '—'}</td>
+                <td><span class="badge badge-subtle">\${cat}</span></td>
+                <td><span style="color: #10b981; font-weight: 600;">\${out}</span></td>
+                <td><span class="badge \${l.sales_status === 'delivered' ? 'badge-done' : (l.sales_status === 'ready_for_delivery' ? 'badge-new' : 'badge-prog')}">\${st}</span></td>
+                <td><strong style="color: var(--emerald);">\${Number(l.expected_revenue || l.estimated_value || 0).toLocaleString()} SAR</strong></td>
+              </tr>
+            \`;
+          }).join('');
         }
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;text-align:center;">تعذر تحميل المبيعات</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#ef4444;text-align:center;">تعذر تحميل المبيعات</td></tr>';
       }
     }
 

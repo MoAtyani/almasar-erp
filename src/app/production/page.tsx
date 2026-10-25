@@ -4,7 +4,7 @@ import AppLayout from '@/components/AppLayout'
 import { useLanguage } from '@/context/LanguageContext'
 import { formatDate } from '@/lib/constants'
 
-type DepartmentTab = 'all' | 'factory_a' | 'factory_b' | 'electrical'
+type DepartmentTab = 'all' | 'factory_a' | 'factory_b' | 'electrical' | 'casting' | 'laser' | 'painting'
 
 export default function ProductionPage() {
   const { lang, isRtl } = useLanguage()
@@ -133,19 +133,27 @@ export default function ProductionPage() {
     rework: { en: 'Rework Required', ar: 'إعادة العمل وتصحيح العيوب', color: '#ef4444' },
     ready_for_delivery: { en: 'Ready for Delivery', ar: 'جاهز للتسليم', color: '#22c55e' },
     packed: { en: 'Packed', ar: 'تم التغليف', color: '#14b8a6' },
-    dispatched: { en: 'Dispatched', ar: 'تم الشحن', color: '#64748b' }
+    dispatched: { en: 'Dispatched', ar: 'تم الشحن', color: '#64748b' },
+    receiving: { en: 'In Receiving', ar: 'استلام: قيد الاستلام', color: '#06b6d4' },
+    completed: { en: 'Completed', ar: 'انتهى بالتصنيع', color: '#10b981' },
+    awaiting_materials: { en: 'Awaiting Materials', ar: 'في انتظار المواد', color: '#ef4444' },
+    material_inspection: { en: 'Quality Inspection', ar: 'فحص جودة المواد', color: '#f59e0b' },
+    showroom_notified: { en: 'Showroom Notified', ar: 'إشعار المعرض', color: '#a855f7' }
   }
 
   const DEPT_NAMES: Record<string, { en: string; ar: string; badge: string }> = {
     factory_a: { en: 'Factory A (Custom Metal)', ar: 'مصنع أ (أعمال الصاج المخصصة)', badge: 'tag-metal' },
     factory_b: { en: 'Factory B (Standard Panels)', ar: 'مصنع ب (اللوحات النمطية)', badge: 'tag-batch' },
-    electrical: { en: 'Electrical (Busbar & Wires)', ar: 'قسم الكهرباء والبسبار والتحكم', badge: 'tag-electrical' }
+    electrical: { en: 'Electrical (Busbar & Wires)', ar: 'قسم الكهرباء والبسبار والتحكم', badge: 'tag-electrical' },
+    casting: { en: 'Casting & Molding', ar: 'قسم الصب والقوالب', badge: 'tag-metal' },
+    laser: { en: 'Laser Cutting & Bending', ar: 'قسم الليزر والتكسير', badge: 'tag-electrical' },
+    painting: { en: 'Painting Shop', ar: 'قسم الدهان والطلاء الحراري', badge: 'tag-batch' }
   }
 
   return (
     <AppLayout
       title="Production Orders & Live Factory Lines"
-      titleAr="أوامر التصنيع وإدارة خطوط المصانع (A, B, Electrical)"
+      titleAr="أوامر التصنيع وإدارة خطوط المصانع"
       actions={
         <div style={{ display: 'flex', gap: 10 }}>
           <button
@@ -162,7 +170,7 @@ export default function ProductionPage() {
       }
     >
       {/* Department Tabs */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border-color)', paddingBottom: 12, flexWrap: 'wrap' }}>
         <button
           className={`btn btn-sm ${activeTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('all')}
@@ -170,22 +178,40 @@ export default function ProductionPage() {
           {isRtl ? 'جميع الأقسام' : 'All Departments'} ({orders.length})
         </button>
         <button
+          className={`btn btn-sm ${activeTab === 'casting' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('casting')}
+        >
+          🧪 {isRtl ? 'قسم الصب' : 'Casting'}
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'laser' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('laser')}
+        >
+          ⚡ {isRtl ? 'قسم الليزر' : 'Laser'}
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'painting' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('painting')}
+        >
+          🎨 {isRtl ? 'قسم الطلاء' : 'Painting'}
+        </button>
+        <button
           className={`btn btn-sm ${activeTab === 'factory_a' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('factory_a')}
         >
-          🏭 {isRtl ? 'مصنع أ (الصاج المخصص)' : 'Factory A (Custom Metal)'}
+          🏭 {isRtl ? 'مصنع أ (الصاج)' : 'Factory A'}
         </button>
         <button
           className={`btn btn-sm ${activeTab === 'factory_b' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('factory_b')}
         >
-          📦 {isRtl ? 'مصنع ب (اللوحات النمطية والدفعات)' : 'Factory B (Batches)'}
+          📦 {isRtl ? 'مصنع ب (النمطي)' : 'Factory B'}
         </button>
         <button
           className={`btn btn-sm ${activeTab === 'electrical' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('electrical')}
         >
-          ⚡ {isRtl ? 'قسم الكهرباء والتجميع' : 'Electrical & Wiring'}
+          ⚡ {isRtl ? 'الكهرباء والتجميع' : 'Electrical'}
         </button>
       </div>
 
@@ -322,6 +348,22 @@ export default function ProductionPage() {
                     )}
                     {order.actual_start && (
                       <span>⏱️ {isRtl ? 'بدء العمل:' : 'Started:'} {formatDate(order.actual_start)}</span>
+                    )}
+                    {order.cover_type && (
+                      <span className="badge badge-subtle">
+                        {order.cover_type === 'glass_cover' ? (isRtl ? '🔍 زجاج غطاء' : 'Glass Cover') : (isRtl ? '📦 جاهز في عادي' : 'Standard Ready')}
+                      </span>
+                    )}
+                    {order.is_new_type && (
+                      <span className="badge badge-subtle" style={{ color: '#f59e0b' }}>
+                        ★ {isRtl ? 'نوع جديد' : 'New Type'}
+                      </span>
+                    )}
+                    {order.required_measurement && (
+                      <span>📐 {isRtl ? 'القياس:' : 'Measurement:'} <strong>{order.required_measurement}</strong></span>
+                    )}
+                    {order.cable_tray_bend && (
+                      <span style={{ color: '#38bdf8' }}>📏 {isRtl ? 'تكسير كابل تري:' : 'Bend:'} <strong>{order.cable_tray_bend}</strong></span>
                     )}
                   </div>
 

@@ -52,7 +52,29 @@ def sync_complete_data():
             changed_by TEXT,
             notes TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )"""
+        )""",
+        """CREATE TABLE IF NOT EXISTS project_templates (
+            id TEXT PRIMARY KEY,
+            template_name TEXT,
+            template_name_ar TEXT,
+            category TEXT,
+            description TEXT,
+            specs TEXT,
+            estimated_cost REAL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "ALTER TABLE crm_leads ADD COLUMN product_category TEXT DEFAULT 'electrical_panels'",
+        "ALTER TABLE crm_leads ADD COLUMN outcome TEXT DEFAULT 'won'",
+        "ALTER TABLE crm_leads ADD COLUMN sales_status TEXT DEFAULT 'under_manufacturing'",
+        "ALTER TABLE crm_leads ADD COLUMN is_template INTEGER DEFAULT 0",
+        "ALTER TABLE crm_leads ADD COLUMN template_name TEXT",
+        "ALTER TABLE production_orders ADD COLUMN cover_type TEXT DEFAULT 'standard'",
+        "ALTER TABLE production_orders ADD COLUMN receipt_status TEXT DEFAULT 'receiving'",
+        "ALTER TABLE production_orders ADD COLUMN is_new_type INTEGER DEFAULT 0",
+        "ALTER TABLE production_orders ADD COLUMN required_measurement TEXT",
+        "ALTER TABLE production_orders ADD COLUMN fixed_measurements TEXT",
+        "ALTER TABLE production_orders ADD COLUMN cable_tray_bend TEXT",
+        "ALTER TABLE production_orders ADD COLUMN details_notes TEXT"
     ]
     all_stmts.extend(schema_stmts)
 
