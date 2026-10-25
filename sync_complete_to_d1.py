@@ -74,7 +74,8 @@ def sync_complete_data():
         "ALTER TABLE production_orders ADD COLUMN required_measurement TEXT",
         "ALTER TABLE production_orders ADD COLUMN fixed_measurements TEXT",
         "ALTER TABLE production_orders ADD COLUMN cable_tray_bend TEXT",
-        "ALTER TABLE production_orders ADD COLUMN details_notes TEXT"
+        "ALTER TABLE production_orders ADD COLUMN details_notes TEXT",
+        "ALTER TABLE profiles ADD COLUMN permissions TEXT"
     ]
     all_stmts.extend(schema_stmts)
 

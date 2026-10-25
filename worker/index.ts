@@ -501,6 +501,55 @@ export default {
         }
       }
 
+      // 7.5 Auth API (Login, Roles, Permissions)
+      if (pathname === '/api/auth/login') {
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const email = (body.email || '').trim().toLowerCase();
+          const password = body.password;
+          const role = body.role;
+
+          let profile: any = null;
+          if (email) {
+            profile = await env.DB.prepare('SELECT * FROM profiles WHERE LOWER(email) = ?').bind(email).first();
+          } else if (role) {
+            profile = await env.DB.prepare('SELECT * FROM profiles WHERE role = ? OR role = "system_admin" ORDER BY created_at ASC').bind(role).first();
+          }
+
+          if (!profile) {
+            return Response.json({ success: false, error: 'User account not found' }, { headers: corsHeaders, status: 401 });
+          }
+
+          const isManager = ['system_admin', 'company_owner', 'general_manager', 'admin'].includes(profile.role);
+          const perms = isManager ? {
+            can_add: true, can_edit: true, can_delete: true, manage_users: true,
+            manage_production: true, manage_sales: true, manage_warehouse: true, manage_finance: true, full_access: true
+          } : {
+            can_add: profile.role !== 'technician', can_edit: true, can_delete: false, manage_users: false
+          };
+
+          const userPayload = {
+            id: profile.id,
+            user_code: profile.user_code || `EMP-${profile.id.slice(-4)}`,
+            full_name: profile.full_name,
+            full_name_ar: profile.full_name_ar || profile.full_name,
+            email: profile.email,
+            role: profile.role,
+            department: profile.department,
+            phone: profile.phone || '',
+            reward_points: profile.reward_points || 0,
+            is_manager: isManager,
+            permissions: perms
+          };
+
+          return Response.json({ success: true, message: 'Login successful', user: userPayload }, { headers: corsHeaders });
+        }
+      }
+
+      if (pathname === '/api/auth/logout') {
+        return Response.json({ success: true, message: 'Logged out' }, { headers: corsHeaders });
+      }
+
       // 8. Users & Roles Management (Manager Add, Edit, Delete, Permissions)
       if (pathname === '/api/users' || pathname === '/api/hr') {
         if (method === 'GET') {
