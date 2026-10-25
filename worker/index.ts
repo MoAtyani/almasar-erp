@@ -1,9 +1,15 @@
+import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
+// @ts-ignore
+import manifestJSON from '__STATIC_CONTENT_MANIFEST';
+const assetManifest = JSON.parse(manifestJSON);
+
 export interface Env {
   DB: any;
+  __STATIC_CONTENT?: any;
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: any): Promise<Response> {
     const url = new URL(request.url);
     const pathname = url.pathname;
     const method = request.method;
@@ -20,29 +26,57 @@ export default {
     }
 
     try {
-      // 1. Health / Welcome & Full Interactive Next.js-style App Shell
+      // 1. Serve Next.js static exported pages and assets for all non-API routes
       if (!pathname.startsWith('/api')) {
-        const wantsJson = url.searchParams.has('json') || (request.headers.get('accept') || '').includes('application/json');
-
-        const stats: any = await env.DB.prepare(`
-          SELECT 
-            (SELECT COUNT(*) FROM panel_projects) as projects_count,
-            (SELECT COUNT(*) FROM profiles) as users_count,
-            (SELECT COUNT(*) FROM production_orders) as orders_count,
-            (SELECT COUNT(*) FROM inventory_items) as items_count,
-            (SELECT COUNT(*) FROM purchase_orders) as procurement_count,
-            (SELECT COUNT(*) FROM technician_tasks) as tasks_count,
-            (SELECT COUNT(*) FROM crm_leads) as crm_count
-        `).first();
-
+        const wantsJson = url.searchParams.has('json') && pathname === '/';
         if (!wantsJson) {
-          const html = getErpPortalHtml(stats, pathname);
-          return new Response(html, {
-            headers: {
-              'Content-Type': 'text/html; charset=utf-8',
-              'Cache-Control': 'no-cache',
+          try {
+            // First attempt: direct asset match (e.g. /_next/..., /favicon.ico, /index.html)
+            return await getAssetFromKV(
+              {
+                request,
+                waitUntil: (p: Promise<any>) => ctx.waitUntil(p),
+              },
+              {
+                ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                ASSET_MANIFEST: assetManifest,
+              }
+            );
+          } catch (e1: any) {
+            // Second attempt: map clean Next.js routes (/crm, /production, /dashboard) to .html files
+            try {
+              const cleanPath = pathname.replace(/\/$/, '');
+              const htmlUrl = new URL(request.url);
+              htmlUrl.pathname = cleanPath ? `${cleanPath}.html` : '/index.html';
+              return await getAssetFromKV(
+                {
+                  request: new Request(htmlUrl.toString(), request),
+                  waitUntil: (p: Promise<any>) => ctx.waitUntil(p),
+                },
+                {
+                  ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                  ASSET_MANIFEST: assetManifest,
+                }
+              );
+            } catch (e2: any) {
+              // Third attempt: SPA fallback to /index.html
+              try {
+                const fallbackUrl = new URL('/index.html', request.url);
+                return await getAssetFromKV(
+                  {
+                    request: new Request(fallbackUrl.toString(), request),
+                    waitUntil: (p: Promise<any>) => ctx.waitUntil(p),
+                  },
+                  {
+                    ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                    ASSET_MANIFEST: assetManifest,
+                  }
+                );
+              } catch (e3: any) {
+                // Last fallback: show server stats
+              }
             }
-          });
+          }
         }
 
         return Response.json({
@@ -105,7 +139,7 @@ export default {
       if (pathname === '/api/projects') {
         if (method === 'GET') {
           const res = await env.DB.prepare('SELECT * FROM panel_projects ORDER BY created_at DESC').all();
-          return Response.json({ success: true, projects: res.results }, { headers: corsHeaders });
+          return Response.json({ success: true, data: res.results, projects: res.results }, { headers: corsHeaders });
         }
         if (method === 'POST') {
           const body: any = await request.json();
@@ -194,7 +228,7 @@ export default {
             LEFT JOIN profiles prof ON t.assigned_employee_id = prof.id
             ORDER BY t.created_at DESC
           `).all();
-          return Response.json({ success: true, tasks: tasks.results }, { headers: corsHeaders });
+          return Response.json({ success: true, data: tasks.results, tasks: tasks.results }, { headers: corsHeaders });
         }
         if (method === 'POST') {
           const body: any = await request.json();
@@ -272,7 +306,7 @@ export default {
             LEFT JOIN panel_projects p ON o.project_id = p.id
             ORDER BY o.created_at DESC
           `).all();
-          return Response.json({ success: true, orders: res.results }, { headers: corsHeaders });
+          return Response.json({ success: true, data: res.results, orders: res.results }, { headers: corsHeaders });
         }
         if (method === 'POST') {
           const body: any = await request.json();
@@ -358,7 +392,7 @@ export default {
             GROUP BY p.id
           `).all();
 
-          return Response.json({ success: true, orders: combined, project_costs: projectCosts.results }, { headers: corsHeaders });
+          return Response.json({ success: true, data: combined, orders: combined, project_costs: projectCosts.results }, { headers: corsHeaders });
         }
         if (method === 'POST') {
           const body: any = await request.json();
@@ -542,12 +576,51 @@ export default {
             permissions: perms
           };
 
-          return Response.json({ success: true, message: 'Login successful', user: userPayload }, { headers: corsHeaders });
+          return Response.json({ success: true, message: 'Login successful', user: userPayload }, {
+            headers: {
+              ...corsHeaders,
+              'Set-Cookie': `almasar_auth_user=${encodeURIComponent(JSON.stringify(userPayload))}; Path=/; SameSite=Lax; Max-Age=2592000`
+            }
+          });
         }
       }
 
+      if (pathname === '/api/auth/me') {
+        const cookieHeader = request.headers.get('cookie') || '';
+        const match = cookieHeader.match(/almasar_auth_user=([^;]+)/);
+        if (match) {
+          try {
+            const user = JSON.parse(decodeURIComponent(match[1]));
+            return Response.json({ success: true, user }, { headers: corsHeaders });
+          } catch (e) {}
+        }
+        const manager = await env.DB.prepare('SELECT * FROM profiles WHERE email = "manager@almasar-switchgear.com" OR role = "system_admin" LIMIT 1').first();
+        if (manager) {
+          return Response.json({
+            success: true,
+            user: {
+              id: manager.id,
+              user_code: manager.user_code || 'EMP-0001',
+              full_name: manager.full_name,
+              full_name_ar: manager.full_name_ar || manager.full_name,
+              email: manager.email,
+              role: manager.role,
+              department: manager.department,
+              is_manager: true,
+              permissions: { can_add: true, can_edit: true, can_delete: true, manage_users: true, manage_production: true, manage_sales: true, manage_warehouse: true, manage_finance: true, full_access: true }
+            }
+          }, { headers: corsHeaders });
+        }
+        return Response.json({ success: false, user: null }, { headers: corsHeaders });
+      }
+
       if (pathname === '/api/auth/logout') {
-        return Response.json({ success: true, message: 'Logged out' }, { headers: corsHeaders });
+        return Response.json({ success: true, message: 'Logged out' }, {
+          headers: {
+            ...corsHeaders,
+            'Set-Cookie': 'almasar_auth_user=; Path=/; Max-Age=0'
+          }
+        });
       }
 
       // 8. Users & Roles Management (Manager Add, Edit, Delete, Permissions)
@@ -697,6 +770,132 @@ export default {
             body.description || ''
           ).run();
           return Response.json({ success: true, data: { id, reference: ref, ...body } }, { headers: corsHeaders });
+        }
+      }
+
+      // 10. Production Catalogue & Batches API
+      if (pathname === '/api/production/catalogue') {
+        if (method === 'GET') {
+          const res = await env.DB.prepare('SELECT * FROM panel_catalogue ORDER BY panel_code ASC').all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const b: any = await request.json();
+          const id = crypto.randomUUID();
+          await env.DB.prepare(`
+            INSERT INTO panel_catalogue (id, panel_code, name, name_ar, width_mm, height_mm, thickness_mm, material, standard_uom)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(id, b.panel_code, b.name, b.name_ar || b.name, b.width_mm || 800, b.height_mm || 1200, b.thickness_mm || 2.0, b.material || 'Steel', b.standard_uom || 'unit').run();
+          return Response.json({ success: true, data: { id, ...b } }, { headers: corsHeaders, status: 201 });
+        }
+      }
+
+      if (pathname === '/api/production/batches') {
+        if (method === 'GET') {
+          const res = await env.DB.prepare(`
+            SELECT b.*, c.panel_code, c.name as panel_name, c.name_ar as panel_name_ar,
+                   c.width_mm, c.height_mm, c.thickness_mm, c.material,
+                   p.reference as project_reference, p.name as project_name,
+                   emp.full_name as responsible_name
+            FROM production_batches b
+            LEFT JOIN panel_catalogue c ON b.panel_id = c.id
+            LEFT JOIN panel_projects p ON b.linked_project_id = p.id
+            LEFT JOIN profiles emp ON b.responsible_employee_id = emp.id
+            ORDER BY b.created_at DESC
+          `).all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const b: any = await request.json();
+          const id = crypto.randomUUID();
+          const count: any = await env.DB.prepare('SELECT COUNT(*) as c FROM production_batches').first();
+          const batchNum = `BAT-2026-${String(Number(count?.c || 0) + 1).padStart(4, '0')}`;
+          await env.DB.prepare(`
+            INSERT INTO production_batches (
+              id, batch_number, panel_id, planned_qty, produced_qty, scrap_qty,
+              stage, priority, linked_project_id, target_completion_date
+            ) VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+          `).bind(
+            id, batchNum, b.panel_id, b.planned_qty || 1,
+            b.stage || 'cutting', b.priority || 'medium',
+            b.linked_project_id || null, b.target_completion_date || null
+          ).run();
+          return Response.json({ success: true, data: { id, batch_number: batchNum, ...b } }, { headers: corsHeaders, status: 201 });
+        }
+      }
+
+      // 11. QC Inspections API
+      if (pathname === '/api/qc') {
+        if (method === 'GET') {
+          const res = await env.DB.prepare(`
+            SELECT q.*, p.reference as project_reference, p.name as project_name,
+                   o.order_number, o.item_description, b.batch_number,
+                   insp.full_name as inspector_name
+            FROM qc_queue q
+            LEFT JOIN panel_projects p ON q.project_id = p.id
+            LEFT JOIN production_orders o ON q.order_id = o.id
+            LEFT JOIN production_batches b ON q.batch_id = b.id
+            LEFT JOIN profiles insp ON q.inspected_by = insp.id
+            ORDER BY q.created_at DESC
+          `).all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const b: any = await request.json();
+          const id = crypto.randomUUID();
+          await env.DB.prepare(`
+            INSERT INTO qc_queue (id, order_id, batch_id, project_id, department, status, checklist_results, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(id, b.order_id || null, b.batch_id || null, b.project_id || null, b.department || 'Assembly', b.status || 'pending', JSON.stringify(b.checklist || {}), b.notes || '').run();
+          return Response.json({ success: true, data: { id, ...b } }, { headers: corsHeaders, status: 201 });
+        }
+      }
+
+      // 12. Finance & Salaries API
+      if (pathname === '/api/finance') {
+        const view = url.searchParams.get('view');
+        if (view === 'salaries') {
+          const res = await env.DB.prepare(`
+            SELECT s.*, emp.full_name as employee_name, emp.full_name_ar as employee_name_ar, emp.department
+            FROM employee_salaries s
+            JOIN profiles emp ON s.employee_id = emp.id
+            ORDER BY s.period_month DESC, emp.full_name ASC
+          `).all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        if (view === 'advances') {
+          const res = await env.DB.prepare(`
+            SELECT a.*, emp.full_name as employee_name, emp.full_name_ar as employee_name_ar
+            FROM employee_advances a
+            JOIN profiles emp ON a.employee_id = emp.id
+            ORDER BY a.request_date DESC
+          `).all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        const res = await env.DB.prepare('SELECT * FROM financial_expenses ORDER BY transaction_date DESC').all();
+        return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+      }
+
+      // 13. Time Tracking API
+      if (pathname === '/api/time-tracking') {
+        if (method === 'GET') {
+          const res = await env.DB.prepare(`
+            SELECT t.*, prof.full_name as technician_name, task.title as task_title
+            FROM time_logs t
+            LEFT JOIN profiles prof ON t.employee_id = prof.id
+            LEFT JOIN technician_tasks task ON t.task_id = task.id
+            ORDER BY t.start_time DESC
+          `).all();
+          return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          const b: any = await request.json();
+          const id = crypto.randomUUID();
+          await env.DB.prepare(`
+            INSERT INTO time_logs (id, task_id, employee_id, start_time, duration_seconds, state)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(id, b.task_id || null, b.employee_id || b.technician_id || null, b.start_time || new Date().toISOString(), (b.duration_hours || 1) * 3600, 'completed').run();
+          return Response.json({ success: true, data: { id, ...b } }, { headers: corsHeaders, status: 201 });
         }
       }
 

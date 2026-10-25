@@ -52,13 +52,14 @@ export default function ProductionPage() {
         fetch('/api/production/catalogue').then(r => r.json())
       ])
 
-      if (ordRes.success) setOrders(ordRes.data)
-      if (batRes.success) setBatches(batRes.data)
-      if (prjRes.success && prjRes.data?.length > 0) {
-        setProjects(prjRes.data)
-        setOrderForm(prev => ({ ...prev, project_id: prev.project_id || prjRes.data[0].id }))
+      if (ordRes?.success) setOrders(ordRes.data || ordRes.orders || [])
+      if (batRes?.success) setBatches(batRes.data || batRes.batches || [])
+      const prjList = prjRes?.data || prjRes?.projects || []
+      if (prjList.length > 0) {
+        setProjects(prjList)
+        setOrderForm(prev => ({ ...prev, project_id: prev.project_id || prjList[0].id }))
       }
-      if (catRes.success) setCatalogue(catRes.data)
+      if (catRes?.success) setCatalogue(catRes.data || catRes.catalogue || [])
     } catch (err) {
       console.error('Failed to load production data:', err)
     } finally {

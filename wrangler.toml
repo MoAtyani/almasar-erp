@@ -2,6 +2,9 @@ name = "almasar"
 main = "worker/index.ts"
 compatibility_date = "2024-04-01"
 
+[site]
+bucket = "./out"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "almasar-db"

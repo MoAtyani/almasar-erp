@@ -5,10 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "export": "powershell -Command \"Rename-Item -Path src\\app\\api -NewName __api_temp; npx next build; Rename-Item -Path src\\app\\__api_temp -NewName api\"",
+    "deploy": "npm run export && npx wrangler deploy",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@cloudflare/kv-asset-handler": "^0.3.4",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "@types/pg": "^8.23.1",
@@ -22,11 +25,15 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.16",
+    "@opennextjs/cloudflare": "^1.20.13",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vercel": "^65.2.0",
+    "wrangler": "^3.112.0"
   }
 }
