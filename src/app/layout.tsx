@@ -4,9 +4,9 @@ import { LanguageProvider } from '@/context/LanguageContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 
 export const metadata: Metadata = {
-  title: 'Al-Masar Switchgear ERP',
-  description: 'Factory Management System for Al-Masar Switchgear — Electrical Panel Manufacturing ERP',
-  keywords: 'ERP, factory, electrical panels, switchgear, manufacturing, QC',
+  title: 'Al-Masar Switchgear ERP | شركة المسار لصناعة اللوحات الكهربائية',
+  description: 'نظام إدارة المصنع المتكامل — شركة المسار لصناعة اللوحات الكهربائية | Factory ERP for Al-Masar Switchgear — Electrical Panel Manufacturing',
+  keywords: 'ERP, Al-Masar, المسار, switchgear, electrical panels, factory management, لوحات كهربائية, الأردن, Jordan',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

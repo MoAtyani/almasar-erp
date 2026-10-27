@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useTheme } from '@/context/ThemeContext'
@@ -235,7 +236,51 @@ export default function LoginPage() {
 
         {/* Header Branding */}
         <div className="login-header-box">
-          <div className="login-brand-badge">⚡ Al-Masar Switchgear ERP | مصنع المسار للصناعات الكهربائية</div>
+          {/* Logo */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <Image
+              src="/logo.jpg"
+              alt="Al-Masar Switchgear"
+              width={220}
+              height={90}
+              style={{
+                objectFit: 'contain',
+                maxHeight: 90,
+                borderRadius: 10,
+                filter: isLight ? 'none' : 'brightness(0.9) contrast(1.1)',
+              }}
+              priority
+            />
+          </div>
+          {/* Company Details */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: 10,
+            padding: '10px 16px',
+            background: isLight ? 'rgba(2, 132, 199, 0.06)' : 'rgba(14, 165, 233, 0.08)',
+            borderRadius: 10,
+            border: `1px solid ${isLight ? 'rgba(2, 132, 199, 0.15)' : 'rgba(14, 165, 233, 0.15)'}`,
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+              شركة المسار لصناعة اللوحات الكهربائية
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
+              <span>📞 962 6 4123035</span>
+              <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>
+              <span>📠 Fax: 962 6 4123034</span>
+              <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>
+              <span>📱 Mob: 962 7 5293111</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              <span>🌐 </span>
+              <a href="https://www.almasarjo.com" target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--accent)', textDecoration: 'none' }}>www.almasarjo.com</a>
+              <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>
+              <span>✉️ </span>
+              <a href="mailto:info@almasarjo.com"
+                style={{ color: 'var(--accent)', textDecoration: 'none' }}>info@almasarjo.com</a>
+            </div>
+          </div>
           <h1 className="login-main-title">نظام تسجيل الدخول وإدارة الصلاحيات</h1>
           <p className="login-subtitle">
             نظام دخول مركزي آمن لكافة مستويات المستخدمين (الإدارة العامة، الإنتاج والصب والليزر والطلاء، المبيعات والنماذج، والمستودع)

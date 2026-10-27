@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -167,11 +168,26 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
     <div className="app-shell">
       {/* SIDEBAR */}
       <aside className="sidebar">
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">⚡</div>
-          <div className="sidebar-logo-text">
-            <span className="brand-name">{isRtl ? 'المسار' : 'Al-Masar'}</span>
-            <span className="brand-sub">{isRtl ? 'نظام إدارة المصنع' : 'Switchgear ERP'}</span>
+        <div className="sidebar-logo" style={{ padding: '16px 16px', flexDirection: 'column', gap: 0, alignItems: 'center' }}>
+          <Image
+            src="/logo.jpg"
+            alt="Al-Masar Switchgear"
+            width={180}
+            height={80}
+            style={{
+              objectFit: 'contain',
+              width: '100%',
+              height: 'auto',
+              maxHeight: 72,
+              borderRadius: 8,
+              filter: isLight ? 'none' : 'brightness(0.92) contrast(1.05)',
+            }}
+            priority
+          />
+          <div style={{ marginTop: 6, textAlign: 'center' }}>
+            <div style={{ fontSize: 9.5, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              {isRtl ? 'نظام إدارة المصنع' : 'Factory ERP System'}
+            </div>
           </div>
         </div>
 
