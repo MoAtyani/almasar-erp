@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/lib/types'
 import { ROLE_LABELS } from '@/lib/constants'
 import { useLanguage } from '@/context/LanguageContext'
+import { useTheme } from '@/context/ThemeContext'
 
 const NAV_ITEMS = [
   {
@@ -104,6 +105,7 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
   const router = useRouter()
   const supabase = createClient()
   const { lang, toggleLang, isRtl } = useLanguage()
+  const { theme, toggleTheme, isLight } = useTheme()
   const [profile, setProfile] = useState<any>(DEFAULT_PROFILE)
   const [showRoleSwitcher, setShowRoleSwitcher] = useState(false)
 
@@ -195,7 +197,10 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
 
         <div className="sidebar-footer">
           {profile && (
-            <div className="user-card" style={{ border: isManager ? '1.5px solid #eab308' : undefined, background: isManager ? 'rgba(234, 179, 8, 0.08)' : undefined }}>
+            <div className="user-card" style={{
+              border: isManager ? (isLight ? '1.5px solid #d97706' : '1.5px solid #eab308') : undefined,
+              background: isManager ? (isLight ? 'rgba(217, 119, 6, 0.08)' : 'rgba(234, 179, 8, 0.08)') : undefined
+            }}>
               <div className="user-avatar" style={{ background: isManager ? 'linear-gradient(135deg, #eab308, #ca8a04)' : undefined, color: isManager ? '#000' : undefined }}>
                 {isManager ? '👑' : (isRtl && profile.full_name_ar ? profile.full_name_ar : profile.full_name).charAt(0).toUpperCase()}
               </div>
@@ -203,8 +208,8 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                 <div className="user-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>{isRtl && profile.full_name_ar ? profile.full_name_ar : profile.full_name}</span>
                 </div>
-                <div className="user-role" style={{ color: isManager ? '#eab308' : undefined, fontWeight: isManager ? 700 : undefined }}>
-                  {isManager ? (isRtl ? 'المدير العام (تحكم كامل)' : 'General Manager (Full Access)') : (ROLE_LABELS[profile.role]?.[lang] || profile.role)}
+                <div className="user-role" style={{ color: isManager ? (isLight ? '#b45309' : '#eab308') : undefined, fontWeight: isManager ? 700 : undefined }}>
+                  {isManager ? (isRtl ? 'المدير العام (تحكم كامل)' : 'General Manager (Full Access)') : ((ROLE_LABELS as any)[profile?.role]?.[lang] || profile?.role)}
                 </div>
               </div>
               <button onClick={handleLogout} title={isRtl ? 'تسجيل الخروج' : 'Logout'} style={{ background: 'none', padding: 4, color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', border: 'none' }}>⎋</button>
@@ -223,8 +228,8 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                 👑 {isRtl ? 'صلاحيات المدير العام (إضافة/تعديل/حذف شامل)' : 'Manager (Full Add/Edit/Delete Access)'}
               </span>
             ) : (
-              <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
-                👤 {ROLE_LABELS[profile.role]?.[lang] || profile.role}
+              <span style={{ background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
+                👤 {(ROLE_LABELS as any)[profile?.role]?.[lang] || profile?.role}
               </span>
             )}
           </div>
@@ -234,7 +239,11 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
             <button
               className="lang-btn"
               onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
-              style={{ background: isManager ? 'rgba(234, 179, 8, 0.15)' : 'rgba(255, 255, 255, 0.08)', borderColor: isManager ? '#eab308' : 'rgba(255, 255, 255, 0.15)', color: isManager ? '#fef08a' : '#fff' }}
+              style={{
+                background: isManager ? (isLight ? 'rgba(217, 119, 6, 0.12)' : 'rgba(234, 179, 8, 0.15)') : 'var(--bg-elevated)',
+                borderColor: isManager ? (isLight ? '#d97706' : '#eab308') : 'var(--border)',
+                color: isManager ? (isLight ? '#b45309' : '#fef08a') : 'var(--text-primary)'
+              }}
               title="تبديل دور المستخدم الحالي لاختبار الصلاحيات"
             >
               🔄 {isRtl ? 'تبديل دور المستخدم' : 'Switch Role'} ({profile?.role === 'system_admin' ? '👑 مدير' : profile?.role})
@@ -247,17 +256,17 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                 top: 48,
                 [isRtl ? 'left' : 'right']: 0,
                 width: 290,
-                background: '#0f172a',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 12,
-                boxShadow: '0 12px 30px rgba(0,0,0,0.6)',
+                boxShadow: 'var(--shadow-lg)',
                 zIndex: 9999,
                 padding: 8,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4
               }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', padding: '6px 8px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
                   {isRtl ? 'اختر دور للاختبار الفوري:' : 'Select role to test live:'}
                 </div>
                 {QUICK_ROLES.map((qr) => (
@@ -266,8 +275,8 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                     type="button"
                     onClick={() => switchUserRole(qr)}
                     style={{
-                      background: profile?.email === qr.email ? 'rgba(14, 165, 233, 0.2)' : 'transparent',
-                      border: profile?.email === qr.email ? '1px solid #38bdf8' : '1px solid transparent',
+                      background: profile?.email === qr.email ? 'var(--accent-dim)' : 'transparent',
+                      border: profile?.email === qr.email ? '1px solid var(--accent)' : '1px solid transparent',
                       borderRadius: 8,
                       padding: '8px 10px',
                       display: 'flex',
@@ -275,16 +284,16 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                       gap: 10,
                       cursor: 'pointer',
                       textAlign: isRtl ? 'right' : 'left',
-                      color: '#fff',
+                      color: 'var(--text-primary)',
                       width: '100%'
                     }}
                   >
                     <span style={{ fontSize: 18 }}>{qr.icon}</span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: qr.isManager ? '#fef08a' : '#fff' }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: qr.isManager ? (isLight ? '#b45309' : '#fef08a') : 'var(--text-primary)' }}>
                         {isRtl ? qr.nameAr : qr.name}
                       </div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                         {qr.email}
                       </div>
                     </div>
@@ -297,6 +306,17 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                 ))}
               </div>
             )}
+
+            {/* Theme Switcher */}
+            <button
+              className="theme-btn"
+              onClick={toggleTheme}
+              title={isRtl ? (isLight ? 'التبديل إلى الوضع الليلي (Dark)' : 'التبديل إلى الوضع النهاري (Light)') : (isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode')}
+              aria-label="Toggle theme"
+            >
+              <span style={{ fontSize: 14 }}>{isLight ? '🌙' : '☀️'}</span>
+              <span>{isRtl ? (isLight ? 'داكن' : 'فاتح') : (isLight ? 'Dark' : 'Light')}</span>
+            </button>
 
             {/* Lang Switcher */}
             <button className="lang-btn" onClick={toggleLang}>

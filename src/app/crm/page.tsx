@@ -409,7 +409,7 @@ export default function CRMPage() {
                   >
                     <span>{info.icon}</span>
                     <span>{info[lang] || info.en}</span>
-                    <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 10 }}>
+                    <span style={{ fontSize: 11, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: '2px 6px', borderRadius: 10 }}>
                       {count}
                     </span>
                   </button>
@@ -528,7 +528,8 @@ export default function CRMPage() {
                             fontSize: 11,
                             fontWeight: 600,
                             color: outcomeInfo.color,
-                            background: 'rgba(255,255,255,0.03)'
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-subtle)'
                           }}
                         >
                           {outcomeInfo[lang] || outcomeInfo.en}
@@ -615,7 +616,7 @@ export default function CRMPage() {
           <div className="card" style={{ padding: '20px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
                   📑 {isRtl ? 'قوالب ونماذج مشاريع الإنتاج (النماذج)' : 'Production Projects Templates'}
                 </h3>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -664,7 +665,7 @@ export default function CRMPage() {
                           {formatCurrency(tpl.estimated_cost)}
                         </strong>
                       </div>
-                      <h4 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+                      <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
                         {isRtl ? (tpl.template_name_ar || tpl.template_name) : tpl.template_name}
                       </h4>
                       <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -712,7 +713,7 @@ export default function CRMPage() {
                           <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>{lead.reference}</span>
                           <strong style={{ fontSize: 12 }}>{formatCurrency(lead.expected_revenue)}</strong>
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#fff', marginBottom: 4 }}>{lead.name}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>{lead.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{lead.customer_name}</div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
                           {stKey === 'under_manufacturing' && (

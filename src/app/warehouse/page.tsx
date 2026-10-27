@@ -607,7 +607,7 @@ export default function WarehousePage() {
               </div>
 
               <div style={{ padding: 20, display: 'grid', gap: 14 }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 8 }}>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: 12, borderRadius: 8 }}>
                   <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{isRtl ? 'الصنف المحدد:' : 'Selected Item:'}</div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)' }}>
                     {showAssignModal.sku} — {showAssignModal.description}

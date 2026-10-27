@@ -5,6 +5,13 @@ export type UserRole =
   | 'design_engineer'
   | 'sales'
   | 'technician'
+  | 'system_admin'
+  | 'admin'
+  | 'sales_officer'
+  | 'production_manager'
+  | 'warehouse_officer'
+  | 'qc_inspector'
+  | 'company_owner'
 
 export type ProjectState = 
   | 'new' | 'planning' | 'draft' | 'estimation' | 'design' | 'procurement'

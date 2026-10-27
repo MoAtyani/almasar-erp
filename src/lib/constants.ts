@@ -76,6 +76,13 @@ export const ROLE_LABELS: Record<UserRole, { en: string; ar: string }> = {
   design_engineer:      { en: 'Design Engineer',       ar: 'مهندس التصميم' },
   sales:                { en: 'Sales',                 ar: 'المبيعات' },
   technician:           { en: 'Technician',            ar: 'فني' },
+  system_admin:         { en: 'System Administrator',  ar: 'مدير النظام العام' },
+  admin:                { en: 'Administrator',         ar: 'مدير' },
+  sales_officer:        { en: 'Sales Officer',         ar: 'مسؤول المبيعات' },
+  production_manager:   { en: 'Production Manager',    ar: 'مدير الإنتاج' },
+  warehouse_officer:    { en: 'Warehouse Officer',     ar: 'أمين المستودع' },
+  qc_inspector:         { en: 'QC Inspector',          ar: 'مفتش الجودة' },
+  company_owner:        { en: 'Company Owner',         ar: 'مالك الشركة' },
 }
 
 export const INVOICE_STATE_LABELS: Record<string, { en: string; ar: string; color: string }> = {

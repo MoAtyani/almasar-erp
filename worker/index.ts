@@ -84,7 +84,7 @@ export default {
           app: 'ALMASAR ERP - Switchgear Factory Management',
           worker_name: 'Almasar',
           database: 'Cloudflare D1 (almasar-db)',
-          stats,
+          stats: { status: 'healthy' },
           endpoints: [
             '/api/dashboard/live',
             '/api/projects',
@@ -956,6 +956,85 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
       --font-ar: 'Cairo', system-ui, sans-serif;
       --font-en: 'Inter', system-ui, sans-serif;
     }
+
+    /* Light Theme Tokens */
+    :root[data-theme="light"], html[data-theme="light"], body.light-theme, [data-theme="light"] {
+      --bg-base: #f4f6fa;
+      --bg-surface: #ffffff;
+      --bg-card: #ffffff;
+      --card-border: #cbd5e1;
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --cyan: #0284c7;
+      --cyan-glow: rgba(2, 132, 199, 0.15);
+      --gold: #b45309;
+      --gold-glow: rgba(180, 83, 9, 0.15);
+      --emerald: #16a34a;
+      --rose: #dc2626;
+      --purple: #7c3aed;
+    }
+
+    [data-theme="light"] .topbar {
+      background: rgba(255, 255, 255, 0.95);
+      border-bottom-color: #e2e8f0;
+    }
+    [data-theme="light"] .topbar-title {
+      color: #0f172a;
+    }
+    [data-theme="light"] .btn-top {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    [data-theme="light"] .btn-top:hover {
+      background: #f1f5f9;
+    }
+    [data-theme="light"] .dept-card,
+    [data-theme="light"] .main-kpi,
+    [data-theme="light"] .panel-card {
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    }
+    [data-theme="light"] .main-kpi-val {
+      color: #0f172a;
+    }
+    [data-theme="light"] .panel-title {
+      color: #0f172a;
+    }
+    [data-theme="light"] th {
+      background: #f8fafc;
+      border-bottom-color: #cbd5e1;
+      color: #64748b;
+    }
+    [data-theme="light"] td {
+      border-bottom-color: #e2e8f0;
+      color: #0f172a;
+    }
+    [data-theme="light"] tr:hover td {
+      background: #f8fafc;
+    }
+    [data-theme="light"] .sidebar-header {
+      border-bottom-color: #e2e8f0;
+    }
+    [data-theme="light"] .sidebar-brand h2 {
+      color: #0f172a;
+    }
+    [data-theme="light"] .nav-item:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    [data-theme="light"] .nav-item.active {
+      background: rgba(2, 132, 199, 0.1);
+      color: var(--cyan);
+    }
+    [data-theme="light"] .sidebar-footer {
+      background: #f8fafc;
+      border-top-color: #e2e8f0;
+    }
+    [data-theme="light"] .user-info h4 {
+      color: #0f172a;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background-color: var(--bg-base);
@@ -1470,6 +1549,7 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
           <span id="liveClockTxt">محدث لحظياً: 1:56:11 PM</span>
         </div>
         <button class="btn-top" id="tvBtn" onclick="toggleTvMode()">📺 وضع الشاشات الكبيرة / TV</button>
+        <button class="btn-top" id="themeBtn" onclick="toggleThemeMode()">☀️ وضع النهاري</button>
         <button class="btn-top" id="langBtn" onclick="toggleLanguage()">GB English</button>
       </div>
     </header>
@@ -1804,6 +1884,43 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
     setInterval(updateClock, 1000);
     updateClock();
 
+    // Theme Mode (Light / Dark)
+    let currentTheme = 'dark';
+    try {
+      currentTheme = localStorage.getItem('almasar_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    } catch(e) {}
+
+    function applyThemeMode(theme) {
+      currentTheme = theme;
+      const root = document.getElementById('htmlRoot');
+      const btn = document.getElementById('themeBtn');
+      if (theme === 'light') {
+        if (root) {
+          root.setAttribute('data-theme', 'light');
+          root.classList.add('light-theme');
+        }
+        document.body.classList.add('light-theme');
+        if (btn) btn.innerText = currentLang === 'ar' ? '🌙 الوضع الليلي' : '🌙 Dark Mode';
+      } else {
+        if (root) {
+          root.setAttribute('data-theme', 'dark');
+          root.classList.remove('light-theme');
+        }
+        document.body.classList.remove('light-theme');
+        if (btn) btn.innerText = currentLang === 'ar' ? '☀️ الوضع النهاري' : '☀️ Light Mode';
+      }
+      try {
+        localStorage.setItem('almasar_theme', theme);
+      } catch(e) {}
+    }
+
+    function toggleThemeMode() {
+      applyThemeMode(currentTheme === 'light' ? 'dark' : 'light');
+    }
+
+    // Apply theme on load
+    applyThemeMode(currentTheme);
+
     // TV Mode
     function toggleTvMode() {
       isTv = !isTv;
@@ -1852,6 +1969,8 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
         document.getElementById('kpi3Lbl').innerText = 'Orders Under Manufacturing';
         document.getElementById('kpi4Lbl').innerText = 'Orders Requiring QC Rework';
         document.getElementById('kpi5Lbl').innerText = 'Panels Ready for Delivery';
+        const tBtn = document.getElementById('themeBtn');
+        if (tBtn) tBtn.innerText = currentTheme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
       } else {
         currentLang = 'ar';
         root.setAttribute('dir', 'rtl');
@@ -1883,6 +2002,8 @@ function getErpPortalHtml(stats: any, initialRoute: string = '/dashboard'): stri
         document.getElementById('kpi3Lbl').innerText = 'قيد التصنيع والتنفيذ الفعلي';
         document.getElementById('kpi4Lbl').innerText = 'أوامر تتطلب إعادة عمل (QC)';
         document.getElementById('kpi5Lbl').innerText = 'لوحات جاهزة للتسليم والشحن';
+        const tBtn = document.getElementById('themeBtn');
+        if (tBtn) tBtn.innerText = currentTheme === 'light' ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري';
       }
     }
 

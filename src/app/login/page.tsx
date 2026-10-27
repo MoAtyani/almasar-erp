@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useTheme } from '@/context/ThemeContext'
 
 interface RoleCredential {
   id: string
@@ -114,6 +115,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const router = useRouter()
+  const { theme, toggleTheme, isLight } = useTheme()
 
   function handleSelectRole(preset: RoleCredential) {
     setSelectedRole(preset)
@@ -208,6 +210,29 @@ export default function LoginPage() {
       <div className="login-orb orb-accent" />
 
       <div className="login-container">
+        {/* Top bar with Theme Switcher */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="theme-btn"
+            title={isLight ? 'التبديل إلى الوضع الليلي (Dark)' : 'التبديل إلى الوضع النهاري (Light)'}
+            style={{
+              background: isLight ? '#ffffff' : 'rgba(30, 41, 59, 0.8)',
+              borderColor: isLight ? '#cbd5e1' : 'rgba(255, 255, 255, 0.15)',
+              color: isLight ? '#0f172a' : '#f1f5f9',
+              boxShadow: isLight ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
+              padding: '8px 14px',
+              fontSize: '13px',
+              fontWeight: 700,
+              borderRadius: '10px'
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{isLight ? '🌙' : '☀️'}</span>
+            <span>{isLight ? 'الوضع الليلي (Dark)' : 'الوضع النهاري (Light)'}</span>
+          </button>
+        </div>
+
         {/* Header Branding */}
         <div className="login-header-box">
           <div className="login-brand-badge">⚡ Al-Masar Switchgear ERP | مصنع المسار للصناعات الكهربائية</div>
@@ -898,6 +923,160 @@ export default function LoginPage() {
           font-size: 11.5px;
           color: #64748b;
         }
+
+        /* Light theme overrides for login page */
+        :global([data-theme="light"]) .login-page-v2 {
+          background: #f4f6fa;
+          color: #0f172a;
+        }
+        :global([data-theme="light"]) .orb-primary {
+          background: rgba(2, 132, 199, 0.08);
+        }
+        :global([data-theme="light"]) .orb-accent {
+          background: rgba(245, 158, 11, 0.08);
+        }
+        :global([data-theme="light"]) .login-brand-badge {
+          color: #0284c7;
+          background: rgba(2, 132, 199, 0.08);
+          border-color: rgba(2, 132, 199, 0.2);
+        }
+        :global([data-theme="light"]) .login-main-title {
+          color: #0f172a;
+        }
+        :global([data-theme="light"]) .login-subtitle {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .manager-highlight-card {
+          background: linear-gradient(135deg, #fffbeb, #fef3c7);
+          border-color: #f59e0b;
+          box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.15);
+        }
+        :global([data-theme="light"]) .manager-crown-icon {
+          background: #fef3c7;
+          border-color: #fde68a;
+        }
+        :global([data-theme="light"]) .manager-title {
+          color: #92400e;
+        }
+        :global([data-theme="light"]) .manager-subtitle-en {
+          color: #78350f;
+        }
+        :global([data-theme="light"]) .manager-access-note {
+          color: #451a03;
+          background: rgba(254, 243, 199, 0.6);
+          border-right-color: #f59e0b;
+        }
+        :global([data-theme="light"]) .cred-chip {
+          background: #ffffff;
+          border-color: #fde68a;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        :global([data-theme="light"]) .cred-chip:hover {
+          background: #fefce8;
+          border-color: #f59e0b;
+        }
+        :global([data-theme="light"]) .cred-label {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .cred-val {
+          color: #b45309;
+        }
+        :global([data-theme="light"]) .copy-icon {
+          color: #0284c7;
+        }
+        :global([data-theme="light"]) .roles-selector-section {
+          background: #ffffff;
+          border-color: #e2e8f0;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+        }
+        :global([data-theme="light"]) .roles-section-title {
+          color: #1e293b;
+        }
+        :global([data-theme="light"]) .roles-count {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .role-select-card {
+          background: #f8fafc;
+          border-color: #e2e8f0;
+        }
+        :global([data-theme="light"]) .role-select-card:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+        }
+        :global([data-theme="light"]) .role-select-card.active {
+          background: #f0f9ff;
+          border-color: #0284c7;
+          box-shadow: 0 0 15px rgba(2, 132, 199, 0.12);
+        }
+        :global([data-theme="light"]) .role-card-title {
+          color: #0f172a;
+        }
+        :global([data-theme="light"]) .role-card-email {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .role-card-desc {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .login-card-inner {
+          background: #ffffff;
+          border-color: #e2e8f0;
+          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+        }
+        :global([data-theme="light"]) .login-card-header {
+          border-bottom-color: #f1f5f9;
+        }
+        :global([data-theme="light"]) .login-avatar-icon {
+          background: rgba(2, 132, 199, 0.08);
+          border-color: rgba(2, 132, 199, 0.2);
+        }
+        :global([data-theme="light"]) .login-card-title {
+          color: #0f172a;
+        }
+        :global([data-theme="light"]) .login-card-sub {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .form-label-v2 {
+          color: #334155;
+        }
+        :global([data-theme="light"]) .pwd-hint {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .form-input-v2 {
+          background: #f8fafc;
+          border-color: #cbd5e1;
+          color: #0f172a;
+        }
+        :global([data-theme="light"]) .form-input-v2:focus {
+          background: #ffffff;
+          border-color: #0284c7;
+          box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+        :global([data-theme="light"]) .btn-toggle-eye {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .role-perms-box {
+          background: #f8fafc;
+          border-color: #e2e8f0;
+        }
+        :global([data-theme="light"]) .perms-title {
+          color: #64748b;
+        }
+        :global([data-theme="light"]) .perm-tag {
+          background: rgba(2, 132, 199, 0.08);
+          color: #0284c7;
+          border-color: rgba(2, 132, 199, 0.2);
+        }
+        :global([data-theme="light"]) .login-footer-info {
+          border-top-color: #f1f5f9;
+          color: #64748b;
+        }
+        /* Role badges in light mode */
+        :global([data-theme="light"]) .badge-manager { background: #fef3c7; color: #92400e; }
+        :global([data-theme="light"]) .badge-sales { background: #d1fae5; color: #065f46; }
+        :global([data-theme="light"]) .badge-prod { background: #f3e8ff; color: #6b21a8; }
+        :global([data-theme="light"]) .badge-tech { background: #e0f2fe; color: #0369a1; }
+        :global([data-theme="light"]) .badge-wh { background: #ffedd5; color: #9a3412; }
+        :global([data-theme="light"]) .badge-qc { background: #fce7f3; color: #9d174d; }
       `}</style>
     </div>
   )

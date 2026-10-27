@@ -505,7 +505,7 @@ export default function TasksPage() {
                             🔍 {isRtl ? 'زجاج غطاء' : 'Glass Cover'}
                           </span>
                         ) : (
-                          <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
+                          <span className="badge" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
                             📦 {isRtl ? 'جاهز في عادي' : 'Standard Ready'}
                           </span>
                         )}

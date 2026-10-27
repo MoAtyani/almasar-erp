@@ -273,7 +273,7 @@ export default function ProcurementPage() {
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr key={`${po.id}-lines`} style={{ background: 'rgba(255,255,255,0.02)' }}>
+                        <tr key={`${po.id}-lines`} style={{ background: 'var(--bg-elevated)' }}>
                           <td colSpan={8} style={{ padding: '12px 24px' }}>
                             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--text-secondary)' }}>
                               {isRtl ? 'تفاصيل المنتجات والمواد المشتراة في هذا الأمر:' : 'Products & Materials Purchased in this Order:'}
@@ -289,7 +289,7 @@ export default function ProcurementPage() {
                               </thead>
                               <tbody>
                                 {lines.map((l: any, idx: number) => (
-                                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                                     <td style={{ padding: '6px 0' }}>{l.item_description}</td>
                                     <td style={{ textAlign: 'center', padding: '6px 0' }}>{l.quantity}</td>
                                     <td style={{ textAlign: 'right', padding: '6px 0' }}>{formatCurrency(l.unit_price)}</td>
