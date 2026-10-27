@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "export": "powershell -Command \"Rename-Item -Path src\\app\\api -NewName __api_temp; npx next build; Rename-Item -Path src\\app\\__api_temp -NewName api\"",
+    "export": "node build-export.js",
     "deploy": "npm run export && npx wrangler deploy",
     "start": "next start",
     "lint": "next lint"
