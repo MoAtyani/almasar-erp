@@ -8,7 +8,6 @@ export default function DashboardPage() {
   const { lang, isRtl } = useLanguage()
   const [data, setData] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tvMode, setTvMode] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date())
 
   useEffect(() => {
@@ -47,12 +46,6 @@ export default function DashboardPage() {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             🟢 {isRtl ? 'محدث لحظياً:' : 'Live:'} {lastRefreshed.toLocaleTimeString()}
           </span>
-          <button
-            className={`btn btn-sm ${tvMode ? 'btn-accent' : 'btn-secondary'}`}
-            onClick={() => setTvMode(!tvMode)}
-          >
-            📺 {isRtl ? (tvMode ? 'الخروج من وضع الشاشة' : 'وضع الشاشات الكبيرة / TV') : (tvMode ? 'Exit TV Mode' : 'TV Large Display')}
-          </button>
         </div>
       }
     >
@@ -79,7 +72,7 @@ export default function DashboardPage() {
       )}
 
       {/* Main KPI Grid Covering All Departments (Workflow 1.7 & Workflow 9) */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: tvMode ? 'repeat(5, 1fr)' : 'repeat(5, 1fr)', marginBottom: 24 }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: 24 }}>
         <div className="kpi-card accent">
           <div className="kpi-icon accent-bg">⚡</div>
           <div className="kpi-value">{kpis.total_open_orders || 0}</div>

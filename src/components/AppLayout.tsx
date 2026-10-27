@@ -92,15 +92,6 @@ const DEFAULT_PROFILE: Profile & { permissions?: any; is_manager?: boolean } = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
-const QUICK_ROLES = [
-  { id: 'manager', role: 'system_admin', name: 'Eng. Tariq Al-Masar', nameAr: 'م. طارق المسار (المدير العام)', email: 'manager@almasar-switchgear.com', icon: '👑', isManager: true },
-  { id: 'sales', role: 'sales_officer', name: 'Ahmad Zaitoun', nameAr: 'أحمد زيتون (مدير المبيعات)', email: 'sales@almasar-switchgear.com', icon: '💼', isManager: false },
-  { id: 'prod', role: 'production_manager', name: 'Abdullah Khaddam', nameAr: 'عبدالله خدام (مدير الإنتاج)', email: 'production@almasar-switchgear.com', icon: '⚙️', isManager: false },
-  { id: 'tech', role: 'technician', name: 'Mahmoud Majid', nameAr: 'محمود ماجد (فني لوحات)', email: 'technician@almasar-switchgear.com', icon: '⚡', isManager: false },
-  { id: 'wh', role: 'warehouse_officer', name: 'Khaled Al-Otaibi', nameAr: 'خالد العتيبي (المستودع)', email: 'warehouse@almasar-switchgear.com', icon: '📦', isManager: false },
-  { id: 'qc', role: 'qc_inspector', name: 'Ahmad Saadi', nameAr: 'أحمد سعدي (مفتش الجودة)', email: 'qc@almasar-switchgear.com', icon: '🔍', isManager: false },
-]
-
 export default function AppLayout({ children, title, titleAr, actions }: Props) {
   const pathname = usePathname()
   const router = useRouter()
@@ -108,7 +99,6 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
   const { lang, toggleLang, isRtl } = useLanguage()
   const { theme, toggleTheme, isLight } = useTheme()
   const [profile, setProfile] = useState<any>(DEFAULT_PROFILE)
-  const [showRoleSwitcher, setShowRoleSwitcher] = useState(false)
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('almasar_user') : null
@@ -125,33 +115,6 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
       }
     }
   }, [])
-
-  function switchUserRole(roleItem: typeof QUICK_ROLES[0]) {
-    const newProfile = {
-      id: `usr-${roleItem.id}`,
-      full_name: roleItem.name,
-      full_name_ar: roleItem.nameAr,
-      email: roleItem.email,
-      role: roleItem.role,
-      department: roleItem.isManager ? 'Executive Management' : 'Operations',
-      is_manager: roleItem.isManager,
-      reward_points: roleItem.isManager ? 1250 : 450,
-      is_active: true,
-      permissions: roleItem.isManager ? {
-        can_add: true, can_edit: true, can_delete: true, manage_users: true, full_access: true
-      } : {
-        can_add: roleItem.id !== 'tech',
-        can_edit: true,
-        can_delete: false,
-        manage_users: false
-      }
-    }
-    setProfile(newProfile)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('almasar_user', JSON.stringify(newProfile))
-    }
-    setShowRoleSwitcher(false)
-  }
 
   async function handleLogout() {
     try {
@@ -239,90 +202,9 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
         <header className="topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <h1 className="topbar-title">{displayTitle}</h1>
-            {isManager ? (
-              <span style={{ background: '#eab308', color: '#000', fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                👑 {isRtl ? 'صلاحيات المدير العام (إضافة/تعديل/حذف شامل)' : 'Manager (Full Add/Edit/Delete Access)'}
-              </span>
-            ) : (
-              <span style={{ background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
-                👤 {(ROLE_LABELS as any)[profile?.role]?.[lang] || profile?.role}
-              </span>
-            )}
           </div>
 
           <div className="topbar-actions" style={{ position: 'relative' }}>
-            {/* Quick Role Switcher Button */}
-            <button
-              className="lang-btn"
-              onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
-              style={{
-                background: isManager ? (isLight ? 'rgba(217, 119, 6, 0.12)' : 'rgba(234, 179, 8, 0.15)') : 'var(--bg-elevated)',
-                borderColor: isManager ? (isLight ? '#d97706' : '#eab308') : 'var(--border)',
-                color: isManager ? (isLight ? '#b45309' : '#fef08a') : 'var(--text-primary)'
-              }}
-              title="تبديل دور المستخدم الحالي لاختبار الصلاحيات"
-            >
-              🔄 {isRtl ? 'تبديل دور المستخدم' : 'Switch Role'} ({profile?.role === 'system_admin' ? '👑 مدير' : profile?.role})
-            </button>
-
-            {/* Role Switcher Dropdown */}
-            {showRoleSwitcher && (
-              <div style={{
-                position: 'absolute',
-                top: 48,
-                [isRtl ? 'left' : 'right']: 0,
-                width: 290,
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-lg)',
-                zIndex: 9999,
-                padding: 8,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
-                  {isRtl ? 'اختر دور للاختبار الفوري:' : 'Select role to test live:'}
-                </div>
-                {QUICK_ROLES.map((qr) => (
-                  <button
-                    key={qr.id}
-                    type="button"
-                    onClick={() => switchUserRole(qr)}
-                    style={{
-                      background: profile?.email === qr.email ? 'var(--accent-dim)' : 'transparent',
-                      border: profile?.email === qr.email ? '1px solid var(--accent)' : '1px solid transparent',
-                      borderRadius: 8,
-                      padding: '8px 10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      cursor: 'pointer',
-                      textAlign: isRtl ? 'right' : 'left',
-                      color: 'var(--text-primary)',
-                      width: '100%'
-                    }}
-                  >
-                    <span style={{ fontSize: 18 }}>{qr.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: qr.isManager ? (isLight ? '#b45309' : '#fef08a') : 'var(--text-primary)' }}>
-                        {isRtl ? qr.nameAr : qr.name}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                        {qr.email}
-                      </div>
-                    </div>
-                    {qr.isManager && (
-                      <span style={{ fontSize: 10, background: '#eab308', color: '#000', fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>
-                        الكل
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-
             {/* Theme Switcher */}
             <button
               className="theme-btn"
@@ -338,13 +220,6 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
             <button className="lang-btn" onClick={toggleLang}>
               {lang === 'en' ? '🇸🇦 عربي' : '🇬🇧 English'}
             </button>
-
-            {/* Points badge */}
-            {profile && profile.reward_points > 0 && (
-              <span className="points-badge">
-                ⭐ {profile.reward_points} {isRtl ? 'نقطة' : 'pts'}
-              </span>
-            )}
 
             {actions}
           </div>
