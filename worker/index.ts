@@ -138,7 +138,17 @@ export default {
       // 3. Projects API (CRUD)
       if (pathname === '/api/projects') {
         if (method === 'GET') {
-          const res = await env.DB.prepare('SELECT * FROM panel_projects ORDER BY created_at DESC').all();
+          const dept = url.searchParams.get('department');
+          let sql = 'SELECT * FROM panel_projects';
+          const params: any[] = [];
+          if (dept && dept !== 'all') {
+            sql += ' WHERE department = ?';
+            params.push(dept);
+          }
+          sql += ' ORDER BY created_at DESC';
+          const res = params.length > 0 
+            ? await env.DB.prepare(sql).bind(...params).all()
+            : await env.DB.prepare(sql).all();
           return Response.json({ success: true, data: res.results, projects: res.results }, { headers: corsHeaders });
         }
         if (method === 'POST') {
@@ -151,8 +161,8 @@ export default {
             INSERT INTO panel_projects (
               id, reference, name, customer_name, customer_email, customer_phone,
               location, description, quotation_amount, currency, priority,
-              date_start, date_delivery, state
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              date_start, date_delivery, state, department, company, panel_specs
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
             id,
             ref,
@@ -167,7 +177,10 @@ export default {
             body.priority || 'medium',
             body.date_start || new Date().toISOString(),
             body.date_delivery || null,
-            body.state || 'new'
+            body.state || 'new',
+            body.department || 'iron',
+            body.company || body.customer_name || '',
+            body.panel_specs || body.details_notes || ''
           ).run();
 
           return Response.json({ success: true, project: { id, reference: ref, ...body } }, { headers: corsHeaders, status: 201 });
@@ -183,6 +196,9 @@ export default {
                 customer_name = COALESCE(?, customer_name),
                 customer_email = COALESCE(?, customer_email),
                 customer_phone = COALESCE(?, customer_phone),
+                company = COALESCE(?, company),
+                department = COALESCE(?, department),
+                panel_specs = COALESCE(?, panel_specs),
                 location = COALESCE(?, location),
                 description = COALESCE(?, description),
                 quotation_amount = COALESCE(?, quotation_amount),
@@ -196,6 +212,9 @@ export default {
             body.customer_name || null,
             body.customer_email || null,
             body.customer_phone || null,
+            body.company || null,
+            body.department || null,
+            body.panel_specs || null,
             body.location || null,
             body.description || null,
             body.quotation_amount !== undefined ? Number(body.quotation_amount) : null,
@@ -301,7 +320,7 @@ export default {
       if (pathname === '/api/production/orders') {
         if (method === 'GET') {
           const res = await env.DB.prepare(`
-            SELECT o.*, p.reference as project_ref, p.name as project_name
+            SELECT o.*, p.reference as project_ref, p.name as project_name, p.company as project_company
             FROM production_orders o
             LEFT JOIN panel_projects p ON o.project_id = p.id
             ORDER BY o.created_at DESC
@@ -312,21 +331,34 @@ export default {
           const body: any = await request.json();
           const id = crypto.randomUUID();
           const countRes = await env.DB.prepare('SELECT COUNT(*) as c FROM production_orders').first();
-          const orderNum = `ORD-2026-${String(Number(countRes?.c || 0) + 1).padStart(3, '0')}`;
+          const num = String(Number(countRes?.c || 0) + 1).padStart(3, '0');
+          let prefix = 'ORD';
+          if (body.department === 'iron') prefix = 'IRN';
+          else if (body.department === 'hangar') prefix = 'HNG';
+          else if (body.department === 'electrical') prefix = 'EL';
+          const orderNum = `${prefix}-2026-${num}`;
 
           await env.DB.prepare(`
             INSERT INTO production_orders (
-              id, order_number, project_id, item_description, department, stage, quantity, requires_painting
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              id, order_number, project_id, item_description, department, stage, quantity,
+              requires_painting, paint_status, receipt_status, details_notes, fixed_measurements,
+              deadline, planned_start
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
             id,
             orderNum,
             body.project_id || null,
             body.item_description || 'Switchgear Panel Assembly',
             body.department || 'electrical',
-            body.stage || 'in_progress',
+            body.stage || (body.department === 'iron' || body.department === 'hangar' || body.department === 'electrical' ? 'started' : 'in_progress'),
             body.quantity ? Number(body.quantity) : 1,
-            body.requires_painting ? 1 : 0
+            body.requires_painting ? 1 : 0,
+            body.paint_status || 'no_painting_needed',
+            body.receipt_status || 'started',
+            body.details_notes || body.drawings_details || '',
+            body.fixed_measurements || body.fixed_measurement || null,
+            body.deadline || null,
+            body.planned_start || body.receipt_date || null
           ).run();
 
           return Response.json({ success: true, order: { id, order_number: orderNum, ...body } }, { headers: corsHeaders, status: 201 });
@@ -335,18 +367,38 @@ export default {
           const body: any = await request.json();
           if (!body.id) return Response.json({ success: false, error: 'Order ID required' }, { headers: corsHeaders, status: 400 });
 
+          const existing: any = await env.DB.prepare('SELECT * FROM production_orders WHERE id = ?').bind(body.id).first();
+          if (!existing) return Response.json({ success: false, error: 'Order not found' }, { headers: corsHeaders, status: 404 });
+
+          let newStage = existing.stage;
+          let newPaint = existing.paint_status;
+
+          if (body.action === 'update_iron_stage') {
+            newStage = body.stage || (existing.stage === 'started' ? 'in_painting' : 'completed');
+          } else if (body.action === 'update_hangar_stage') {
+            newStage = body.stage || (existing.stage === 'started' ? 'in_painting' : existing.stage === 'in_painting' ? 'ready_for_delivery' : 'completed');
+          } else if (body.action === 'update_electrical_stage') {
+            newStage = body.stage || (existing.stage === 'started' ? 'ready_for_inspection' : 'completed');
+          } else if (body.action === 'toggle_painting') {
+            newPaint = body.paint_status !== undefined ? body.paint_status : (existing.paint_status === 'in_painting' ? 'no_painting_needed' : 'in_painting');
+          } else if (body.stage) {
+            newStage = body.stage;
+          }
+
           await env.DB.prepare(`
             UPDATE production_orders
             SET item_description = COALESCE(?, item_description),
                 department = COALESCE(?, department),
-                stage = COALESCE(?, stage),
+                stage = ?,
+                paint_status = ?,
                 quantity = COALESCE(?, quantity),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
           `).bind(
             body.item_description || null,
             body.department || null,
-            body.stage || null,
+            newStage,
+            newPaint,
             body.quantity !== undefined ? Number(body.quantity) : null,
             body.id
           ).run();
@@ -827,8 +879,13 @@ export default {
       // 11. QC Inspections API
       if (pathname === '/api/qc') {
         if (method === 'GET') {
-          const res = await env.DB.prepare(`
-            SELECT q.*, p.reference as project_reference, p.name as project_name,
+          const dept = url.searchParams.get('department');
+          const status = url.searchParams.get('status');
+          const projectId = url.searchParams.get('project_id');
+          const search = url.searchParams.get('search');
+
+          let sql = `
+            SELECT q.*, p.reference as project_reference, p.name as project_name, p.company as project_company,
                    o.order_number, o.item_description, b.batch_number,
                    insp.full_name as inspector_name
             FROM qc_queue q
@@ -836,18 +893,82 @@ export default {
             LEFT JOIN production_orders o ON q.order_id = o.id
             LEFT JOIN production_batches b ON q.batch_id = b.id
             LEFT JOIN profiles insp ON q.inspected_by = insp.id
-            ORDER BY q.created_at DESC
-          `).all();
+            WHERE 1=1
+          `;
+          const params: any[] = [];
+          if (dept && dept !== 'all') {
+            sql += ' AND q.department = ?';
+            params.push(dept);
+          }
+          if (status && status !== 'all') {
+            sql += ' AND q.status = ?';
+            params.push(status);
+          }
+          if (projectId && projectId !== 'all') {
+            sql += ' AND q.project_id = ?';
+            params.push(projectId);
+          }
+          if (search && search.trim()) {
+            sql += ' AND (p.reference LIKE ? OR p.name LIKE ? OR q.inspection_number LIKE ?)';
+            const s = `%${search.trim()}%`;
+            params.push(s, s, s);
+          }
+          sql += ' ORDER BY q.created_at DESC';
+
+          const res = params.length > 0 
+            ? await env.DB.prepare(sql).bind(...params).all()
+            : await env.DB.prepare(sql).all();
           return Response.json({ success: true, data: res.results }, { headers: corsHeaders });
         }
         if (method === 'POST') {
           const b: any = await request.json();
           const id = crypto.randomUUID();
+          const countRes = await env.DB.prepare('SELECT COUNT(*) as c FROM qc_queue').first();
+          const inspNum = `QC-2026-${String(Number(countRes?.c || 0) + 1).padStart(4, '0')}`;
+
           await env.DB.prepare(`
-            INSERT INTO qc_queue (id, order_id, batch_id, project_id, department, status, checklist_results, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(id, b.order_id || null, b.batch_id || null, b.project_id || null, b.department || 'Assembly', b.status || 'pending', JSON.stringify(b.checklist || {}), b.notes || '').run();
-          return Response.json({ success: true, data: { id, ...b } }, { headers: corsHeaders, status: 201 });
+            INSERT INTO qc_queue (
+              id, inspection_number, order_id, batch_id, project_id, department, status,
+              checklists, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          `).bind(
+            id,
+            inspNum,
+            b.order_id || null,
+            b.batch_id || null,
+            b.project_id || null,
+            b.department || 'iron',
+            b.status || 'pending',
+            JSON.stringify(b.checklists || []),
+            b.notes || null
+          ).run();
+          return Response.json({ success: true, data: { id, inspection_number: inspNum, ...b } }, { headers: corsHeaders, status: 201 });
+        }
+        if (method === 'PUT' || method === 'PATCH') {
+          const b: any = await request.json();
+          if (!b.id) return Response.json({ success: false, error: 'Inspection ID required' }, { headers: corsHeaders, status: 400 });
+
+          const newStatus = b.decision === 'passed' ? 'passed' : b.decision === 'failed' ? 'failed' : (b.status || 'pending');
+
+          await env.DB.prepare(`
+            UPDATE qc_queue
+            SET status = ?,
+                defect_category = ?,
+                defect_severity = ?,
+                notes = COALESCE(?, notes),
+                corrective_actions = ?,
+                inspected_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(
+            newStatus,
+            b.decision === 'failed' ? b.defect_category || null : null,
+            b.decision === 'failed' ? b.defect_severity || null : null,
+            b.notes || null,
+            b.decision === 'failed' ? b.corrective_actions || null : null,
+            b.id
+          ).run();
+
+          return Response.json({ success: true, message: 'QC inspection updated successfully' }, { headers: corsHeaders });
         }
       }
 

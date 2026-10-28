@@ -1,4 +1,5 @@
 name = "almasar"
+account_id = "ca7d236b2452243c57c26f42d92f5bea"
 main = "worker/index.ts"
 compatibility_date = "2024-04-01"
 
