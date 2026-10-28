@@ -33,9 +33,12 @@ interface ProjectTemplate {
 
 const CATEGORY_MAP: Record<string, { ar: string; en: string; icon: string; color: string }> = {
   all: { ar: 'الكل', en: 'All Departments', icon: '🏢', color: '#38bdf8' },
-  electrical_panels: { ar: 'لوحات كهربائية', en: 'Electrical Panels', icon: '⚡', color: '#f59e0b' },
-  cable_tray_enclosure: { ar: 'كابل تري وخزنه', en: 'Cable Tray & Enclosures', icon: '📦', color: '#06b6d4' },
-  materials_parts: { ar: 'مواد وقطع', en: 'Materials & Parts', icon: '🔩', color: '#a855f7' }
+  iron: { ar: 'مشاريع الحديد', en: 'Iron Projects', icon: '🔩', color: '#f59e0b' },
+  hangar: { ar: 'مشاريع الهنجر', en: 'Hangar Projects', icon: '🏭', color: '#06b6d4' },
+  electrical: { ar: 'مشاريع الكهرباء والتجميع', en: 'Electrical & Assembly Projects', icon: '⚡', color: '#8b5cf6' },
+  electrical_panels: { ar: 'مشاريع الكهرباء والتجميع', en: 'Electrical & Assembly Projects', icon: '⚡', color: '#8b5cf6' },
+  cable_tray_enclosure: { ar: 'مشاريع الهنجر', en: 'Hangar Projects', icon: '🏭', color: '#06b6d4' },
+  materials_parts: { ar: 'مشاريع الحديد', en: 'Iron Projects', icon: '🔩', color: '#f59e0b' }
 }
 
 const STATUS_MAP: Record<string, { ar: string; en: string; color: string; bg: string }> = {
@@ -70,12 +73,13 @@ export default function CRMPage() {
   // Form
   const [form, setForm] = useState({
     name: '',
+    reference: '',
     customer_name: '',
     company: '',
     customer_email: '',
     customer_phone: '',
     expected_revenue: '',
-    product_category: 'electrical_panels',
+    product_category: 'iron',
     outcome: 'won',
     sales_status: 'under_manufacturing',
     description: '',
@@ -249,34 +253,17 @@ export default function CRMPage() {
     setShowAddModal(true)
   }
 
-  function openEdit(lead: SalesLead) {
-    setSelectedLead(lead)
-    setForm({
-      name: lead.name,
-      customer_name: lead.customer_name,
-      company: lead.company || lead.customer_name,
-      customer_email: lead.customer_email || '',
-      customer_phone: lead.customer_phone || '',
-      expected_revenue: String(lead.expected_revenue || 0),
-      product_category: lead.product_category || 'electrical_panels',
-      outcome: lead.outcome || 'won',
-      sales_status: lead.sales_status || 'under_manufacturing',
-      description: lead.description || '',
-      is_template: false,
-      template_name: ''
-    })
-    setShowEditModal(true)
-  }
-
   function resetForm() {
+    const nextRef = `REF-2026-${String(leads.length + 1).padStart(4, '0')}`
     setForm({
       name: '',
+      reference: nextRef,
       customer_name: '',
       company: '',
       customer_email: '',
       customer_phone: '',
       expected_revenue: '',
-      product_category: 'electrical_panels',
+      product_category: 'iron',
       outcome: 'won',
       sales_status: 'under_manufacturing',
       description: '',
@@ -286,9 +273,35 @@ export default function CRMPage() {
     setSelectedLead(null)
   }
 
+  function openEdit(lead: SalesLead) {
+    setSelectedLead(lead)
+    setForm({
+      name: lead.name,
+      reference: lead.reference,
+      customer_name: lead.customer_name,
+      company: lead.company || lead.customer_name,
+      customer_email: lead.customer_email || '',
+      customer_phone: lead.customer_phone || '',
+      expected_revenue: String(lead.expected_revenue || 0),
+      product_category: lead.product_category || 'iron',
+      outcome: lead.outcome || 'won',
+      sales_status: lead.sales_status || 'under_manufacturing',
+      description: lead.description || '',
+      is_template: false,
+      template_name: ''
+    })
+    setShowEditModal(true)
+  }
+
   // Filtered Leads
   const filtered = leads.filter(l => {
-    const matchCategory = selectedCategory === 'all' || l.product_category === selectedCategory
+    let matchCategory = true
+    if (selectedCategory !== 'all') {
+      if (selectedCategory === 'iron') matchCategory = l.product_category === 'iron' || l.product_category === 'materials_parts'
+      else if (selectedCategory === 'hangar') matchCategory = l.product_category === 'hangar' || l.product_category === 'cable_tray_enclosure'
+      else if (selectedCategory === 'electrical') matchCategory = l.product_category === 'electrical' || l.product_category === 'electrical_panels'
+      else matchCategory = l.product_category === selectedCategory
+    }
     const matchStatus = selectedStatus === 'all' || l.sales_status === selectedStatus
     const matchSearch = (
       l.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -307,15 +320,12 @@ export default function CRMPage() {
 
   return (
     <AppLayout
-      title="Sales & Templates"
-      titleAr="المبيعات والنماذج (مشاريع الإنتاج)"
+      title="Sales & Projects"
+      titleAr="المبيعات (مشاريع المسار)"
       actions={
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowTemplateModal(true)}>
-            {isRtl ? '📑 + إضافة نموذج جديد' : '📑 + New Template'}
-          </button>
           <button className="btn btn-primary btn-sm" onClick={() => { resetForm(); setShowAddModal(true) }}>
-            {isRtl ? '+ إضافة مشروع بيع جديد' : '+ New Sales Project'}
+            {isRtl ? '+ مشروع جديد' : '+ New Project'}
           </button>
         </div>
       }
@@ -461,27 +471,24 @@ export default function CRMPage() {
             />
           </div>
 
-          {/* TABLE: Section 1 (الرقم المرجعي / اسم المشروع / العميل / النتيجة / الحالة) */}
+          {/* TABLE: Section 1 */}
           <div className="table-container">
             <table className="table">
               <thead>
                 <tr>
                   <th>{isRtl ? 'الرقم المرجعي' : 'Ref Number'}</th>
                   <th>{isRtl ? 'اسم المشروع' : 'Project Name'}</th>
-                  <th>{isRtl ? 'العميل / الشركة' : 'Client / Company'}</th>
-                  <th>{isRtl ? 'القسم والتصنيف' : 'Department'}</th>
-                  <th>{isRtl ? 'النتيجة' : 'Outcome'}</th>
-                  <th>{isRtl ? 'الحالة' : 'Status'}</th>
+                  <th>{isRtl ? 'اسم العميل' : 'Customer'}</th>
+                  <th>{isRtl ? 'الشركة / المؤسسة' : 'Company'}</th>
+                  <th>{isRtl ? 'القسم' : 'Department'}</th>
                   <th>{isRtl ? 'القيمة' : 'Value'}</th>
-                  <th>{isRtl ? 'الإجراء السريع' : 'Workflow Action'}</th>
+                  <th>{isRtl ? 'تفاصيل وملاحظات المشروع' : 'Details & Notes'}</th>
                   <th>{isRtl ? 'خيارات' : 'Options'}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(lead => {
-                  const catInfo = CATEGORY_MAP[lead.product_category] || CATEGORY_MAP.electrical_panels
-                  const statusInfo = STATUS_MAP[lead.sales_status] || STATUS_MAP.under_manufacturing
-                  const outcomeInfo = OUTCOME_MAP[lead.outcome] || OUTCOME_MAP.won
+                  const catInfo = CATEGORY_MAP[lead.product_category] || CATEGORY_MAP.iron
 
                   return (
                     <tr key={lead.id}>
@@ -490,17 +497,12 @@ export default function CRMPage() {
                       </td>
                       <td>
                         <strong>{lead.name}</strong>
-                        {lead.description && (
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {lead.description}
-                          </div>
-                        )}
                       </td>
                       <td>
-                        <div><strong>{lead.customer_name}</strong></div>
-                        {lead.company && lead.company !== lead.customer_name && (
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lead.company}</div>
-                        )}
+                        <strong>{lead.customer_name}</strong>
+                      </td>
+                      <td>
+                        <div>{lead.company || lead.customer_name}</div>
                       </td>
                       <td>
                         <span
@@ -520,61 +522,13 @@ export default function CRMPage() {
                           {catInfo.icon} {catInfo[lang] || catInfo.en}
                         </span>
                       </td>
-                      <td>
-                        <span
-                          style={{
-                            padding: '3px 8px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: outcomeInfo.color,
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border-subtle)'
-                          }}
-                        >
-                          {outcomeInfo[lang] || outcomeInfo.en}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            background: statusInfo.bg,
-                            color: statusInfo.color,
-                            border: `1px solid ${statusInfo.color}44`
-                          }}
-                        >
-                          {statusInfo[lang] || statusInfo.en}
-                        </span>
-                      </td>
                       <td style={{ fontWeight: 700 }}>
                         {formatCurrency(lead.expected_revenue)}
                       </td>
-                      <td>
-                        {lead.sales_status === 'under_manufacturing' && (
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            style={{ fontSize: 11, padding: '4px 8px', borderColor: '#38bdf8', color: '#38bdf8' }}
-                            onClick={() => handleUpdateStatus(lead.id, 'ready_for_delivery')}
-                          >
-                            {isRtl ? 'جاهز للتسليم ➔' : 'Ready Delivery ➔'}
-                          </button>
-                        )}
-                        {lead.sales_status === 'ready_for_delivery' && (
-                          <button
-                            className="btn btn-sm btn-primary"
-                            style={{ fontSize: 11, padding: '4px 8px', background: '#10b981', borderColor: '#10b981' }}
-                            onClick={() => handleUpdateStatus(lead.id, 'delivered')}
-                          >
-                            {isRtl ? 'تم التسليم ✓' : 'Delivered ✓'}
-                          </button>
-                        )}
-                        {lead.sales_status === 'delivered' && (
-                          <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓ {isRtl ? 'مكتمل' : 'Completed'}</span>
-                        )}
+                      <td style={{ maxWidth: 280 }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {lead.description || '—'}
+                        </div>
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -599,7 +553,7 @@ export default function CRMPage() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                       {isRtl ? 'لا توجد مشاريع بيع مطابقة للفلاتر المحددة' : 'No sales projects match the criteria'}
                     </td>
                   </tr>
@@ -748,21 +702,33 @@ export default function CRMPage() {
           <div className="modal-content" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleCreateSalesOrder}>
               <div className="modal-header">
-                <h3>{isRtl ? 'إضافة مشروع بيع وإنتاج جديد' : 'New Sales & Production Project'}</h3>
+                <h3>{isRtl ? 'مشروع جديد' : 'New Project'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>✕</button>
               </div>
 
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
-                <div>
-                  <label className="label">{isRtl ? 'اسم المشروع / عنوان الطلبية *' : 'Project Name / Title *'}</label>
-                  <input
-                    required
-                    type="text"
-                    className="input"
-                    placeholder={isRtl ? 'مثال: لوحة توزيع رئيسية MDB لمشروع برج التحلية' : 'e.g. MDB Main Board for Tower'}
-                    value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'اسم المشروع *' : 'Project Name *'}</label>
+                    <input
+                      required
+                      type="text"
+                      className="input"
+                      placeholder={isRtl ? 'مشروع لوحة توزيع رئيسية MDB' : 'Main MDB Board Project'}
+                      value={form.name}
+                      onChange={e => setForm({ ...form, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'الرقم المرجعي' : 'Ref Number'}</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="REF-2026-0001"
+                      value={form.reference}
+                      onChange={e => setForm({ ...form, reference: e.target.value })}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -778,7 +744,7 @@ export default function CRMPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'الشركة / المؤسسة' : 'Company'}</label>
+                    <label className="label">{isRtl ? 'الشركة / المؤسسة' : 'Company / Institution'}</label>
                     <input
                       type="text"
                       className="input"
@@ -791,46 +757,19 @@ export default function CRMPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label className="label">{isRtl ? 'القسم / خط الإنتاج (صفحة البيع) *' : 'Department & Line *'}</label>
+                    <label className="label">{isRtl ? 'القسم *' : 'Department *'}</label>
                     <select
                       className="input"
                       value={form.product_category}
                       onChange={e => setForm({ ...form, product_category: e.target.value })}
                     >
-                      <option value="electrical_panels">⚡ لوحات كهربائية (Electrical panels)</option>
-                      <option value="cable_tray_enclosure">📦 كابل تري وخزنه (Cable tray & storage)</option>
-                      <option value="materials_parts">🔩 مواد وقطع (Materials & parts)</option>
+                      <option value="iron">{isRtl ? 'أ- مشاريع الحديد' : 'Iron Projects'}</option>
+                      <option value="hangar">{isRtl ? 'ب- مشاريع الهنجر' : 'Hangar Projects'}</option>
+                      <option value="electrical">{isRtl ? 'ج- مشاريع الكهرباء والتجميع' : 'Electrical & Assembly Projects'}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'النتيجة (Outcome) *' : 'Outcome *'}</label>
-                    <select
-                      className="input"
-                      value={form.outcome}
-                      onChange={e => setForm({ ...form, outcome: e.target.value })}
-                    >
-                      <option value="won">✓ تم التعاقد / ناجح (Won)</option>
-                      <option value="in_progress">⏳ جاري التفاوض (In Progress)</option>
-                      <option value="pending">معلق للدراسة (Pending)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label className="label">{isRtl ? 'حالة الإنتاج والتسليم *' : 'Status *'}</label>
-                    <select
-                      className="input"
-                      value={form.sales_status}
-                      onChange={e => setForm({ ...form, sales_status: e.target.value })}
-                    >
-                      <option value="under_manufacturing">⚙️ قيد التصنيع (Under manufacturing)</option>
-                      <option value="ready_for_delivery">🚚 جاهز للتسليم (Ready for delivery)</option>
-                      <option value="delivered">✅ تم التسليم (Delivered)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">{isRtl ? 'القيمة المتوقعة (SAR)' : 'Contract Value (SAR)'}</label>
+                    <label className="label">{isRtl ? 'القيمة (SAR)' : 'Value (SAR)'}</label>
                     <input
                       type="number"
                       className="input"
@@ -846,7 +785,7 @@ export default function CRMPage() {
                   <textarea
                     className="input"
                     rows={3}
-                    placeholder={isRtl ? 'اكتب المواصفات والملاحظات المطلوبة...' : 'Enter specifications and details...'}
+                    placeholder={isRtl ? 'اكتب تفاصيل وملاحظات المشروع...' : 'Enter specifications and details...'}
                     value={form.description}
                     onChange={e => setForm({ ...form, description: e.target.value })}
                   />
@@ -877,20 +816,31 @@ export default function CRMPage() {
               </div>
 
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
-                <div>
-                  <label className="label">{isRtl ? 'اسم المشروع' : 'Project Name'}</label>
-                  <input
-                    required
-                    type="text"
-                    className="input"
-                    value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="label">{isRtl ? 'اسم المشروع' : 'Project Name'}</label>
+                    <input
+                      required
+                      type="text"
+                      className="input"
+                      value={form.name}
+                      onChange={e => setForm({ ...form, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">{isRtl ? 'الرقم المرجعي' : 'Ref Number'}</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={form.reference}
+                      onChange={e => setForm({ ...form, reference: e.target.value })}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label className="label">{isRtl ? 'العميل' : 'Customer'}</label>
+                    <label className="label">{isRtl ? 'اسم العميل' : 'Customer'}</label>
                     <input
                       required
                       type="text"
@@ -900,7 +850,7 @@ export default function CRMPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'الشركة' : 'Company'}</label>
+                    <label className="label">{isRtl ? 'الشركة / المؤسسة' : 'Company / Institution'}</label>
                     <input
                       type="text"
                       className="input"
@@ -912,42 +862,15 @@ export default function CRMPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label className="label">{isRtl ? 'القسم / خط الإنتاج' : 'Department'}</label>
+                    <label className="label">{isRtl ? 'القسم' : 'Department'}</label>
                     <select
                       className="input"
                       value={form.product_category}
                       onChange={e => setForm({ ...form, product_category: e.target.value })}
                     >
-                      <option value="electrical_panels">⚡ لوحات كهربائية (Electrical panels)</option>
-                      <option value="cable_tray_enclosure">📦 كابل تري وخزنه (Cable tray & storage)</option>
-                      <option value="materials_parts">🔩 مواد وقطع (Materials & parts)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">{isRtl ? 'الحالة' : 'Status'}</label>
-                    <select
-                      className="input"
-                      value={form.sales_status}
-                      onChange={e => setForm({ ...form, sales_status: e.target.value })}
-                    >
-                      <option value="under_manufacturing">⚙️ قيد التصنيع (Under manufacturing)</option>
-                      <option value="ready_for_delivery">🚚 جاهز للتسليم (Ready for delivery)</option>
-                      <option value="delivered">✅ تم التسليم (Delivered)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label className="label">{isRtl ? 'النتيجة' : 'Outcome'}</label>
-                    <select
-                      className="input"
-                      value={form.outcome}
-                      onChange={e => setForm({ ...form, outcome: e.target.value })}
-                    >
-                      <option value="won">✓ تم التعاقد / ناجح (Won)</option>
-                      <option value="in_progress">⏳ جاري العمل (In Progress)</option>
-                      <option value="pending">معلق (Pending)</option>
+                      <option value="iron">{isRtl ? 'أ- مشاريع الحديد' : 'Iron Projects'}</option>
+                      <option value="hangar">{isRtl ? 'ب- مشاريع الهنجر' : 'Hangar Projects'}</option>
+                      <option value="electrical">{isRtl ? 'ج- مشاريع الكهرباء والتجميع' : 'Electrical & Assembly Projects'}</option>
                     </select>
                   </div>
                   <div>
@@ -962,7 +885,7 @@ export default function CRMPage() {
                 </div>
 
                 <div>
-                  <label className="label">{isRtl ? 'ملاحظات' : 'Notes'}</label>
+                  <label className="label">{isRtl ? 'تفاصيل وملاحظات المشروع' : 'Project Details & Notes'}</label>
                   <textarea
                     className="input"
                     rows={3}

@@ -15,7 +15,7 @@ const NAV_ITEMS = [
     sectionAr: 'نظرة عامة',
     items: [
       { href: '/dashboard', icon: '▦', label: 'Dashboard', labelAr: 'لوحة التحكم' },
-      { href: '/projects', icon: '🗂', label: 'Panel Projects', labelAr: 'مشاريع اللوحات' },
+      { href: '/projects', icon: '🗂', label: 'Al-Masar Projects', labelAr: 'مشاريع المسار' },
     ],
   },
   {
@@ -33,7 +33,6 @@ const NAV_ITEMS = [
       { href: '/tasks', icon: '✅', label: 'Tasks & Production', labelAr: 'المهام والإنتاج' },
       { href: '/procurement', icon: '🛒', label: 'Procurement', labelAr: 'المشتريات' },
       { href: '/warehouse', icon: '🏭', label: 'Warehouse', labelAr: 'المستودع' },
-      { href: '/production', icon: '⚙️', label: 'Production (MRP)', labelAr: 'الإنتاج (MRP)' },
       { href: '/qc', icon: '🔍', label: 'Quality Control', labelAr: 'ضبط الجودة' },
       { href: '/logistics', icon: '🚚', label: 'Logistics', labelAr: 'اللوجستيات' },
     ],
@@ -73,8 +72,8 @@ interface Props {
 
 const DEFAULT_PROFILE: Profile & { permissions?: any; is_manager?: boolean } = {
   id: 'usr-manager-001',
-  full_name: 'Eng. Tariq Al-Masar',
-  full_name_ar: 'م. طارق المسار',
+  full_name: 'Eng. Yousef Basbous',
+  full_name_ar: 'م. يوسف بصبوص',
   email: 'manager@almasar-switchgear.com',
   role: 'system_admin',
   department: 'Executive Management',

@@ -6,6 +6,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const state = searchParams.get('state')
+    const department = searchParams.get('department')
     const search = searchParams.get('search')
 
     let sql = `
@@ -22,9 +23,14 @@ export async function GET(req: NextRequest) {
       sql += ` AND p.state = $${params.length}`
     }
 
+    if (department && department !== 'all') {
+      params.push(department)
+      sql += ` AND p.department = $${params.length}`
+    }
+
     if (search) {
       params.push(`%${search}%`)
-      sql += ` AND (p.reference ILIKE $${params.length} OR p.name ILIKE $${params.length} OR p.customer_name ILIKE $${params.length} OR p.job_order_number ILIKE $${params.length})`
+      sql += ` AND (p.reference ILIKE $${params.length} OR p.name ILIKE $${params.length} OR p.customer_name ILIKE $${params.length} OR p.company ILIKE $${params.length} OR p.job_order_number ILIKE $${params.length})`
     }
 
     sql += ` ORDER BY p.created_at DESC`
@@ -50,8 +56,10 @@ export async function POST(req: NextRequest) {
     const {
       name,
       customer_name,
+      company,
       customer_email,
       customer_phone,
+      department = 'iron',
       location,
       date_delivery,
       description,
@@ -72,18 +80,20 @@ export async function POST(req: NextRequest) {
 
     const insertSql = `
       INSERT INTO panel_projects (
-        reference, name, customer_name, customer_email, customer_phone,
-        location, date_delivery, description, job_order_number,
+        reference, name, customer_name, company, customer_email, customer_phone,
+        department, location, date_delivery, description, job_order_number,
         quotation_amount, priority, state, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'new', $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'new', $14)
       RETURNING *
     `
     const insertRes = await query(insertSql, [
       reference,
       name,
       customer_name,
+      company || customer_name,
       customer_email || null,
       customer_phone || null,
+      department || 'iron',
       location || null,
       date_delivery || null,
       description || null,
@@ -209,8 +219,10 @@ export async function PUT(req: NextRequest) {
       id,
       name,
       customer_name,
+      company,
       customer_email,
       customer_phone,
+      department,
       location,
       date_start,
       date_delivery,
@@ -228,24 +240,28 @@ export async function PUT(req: NextRequest) {
       UPDATE panel_projects
       SET name = COALESCE($1, name),
           customer_name = COALESCE($2, customer_name),
-          customer_email = COALESCE($3, customer_email),
-          customer_phone = COALESCE($4, customer_phone),
-          location = COALESCE($5, location),
-          date_start = COALESCE($6, date_start),
-          date_delivery = COALESCE($7, date_delivery),
-          description = COALESCE($8, description),
-          quotation_amount = COALESCE($9, quotation_amount),
-          priority = COALESCE($10, priority),
-          state = COALESCE($11, state),
+          company = COALESCE($3, company),
+          customer_email = COALESCE($4, customer_email),
+          customer_phone = COALESCE($5, customer_phone),
+          department = COALESCE($6, department),
+          location = COALESCE($7, location),
+          date_start = COALESCE($8, date_start),
+          date_delivery = COALESCE($9, date_delivery),
+          description = COALESCE($10, description),
+          quotation_amount = COALESCE($11, quotation_amount),
+          priority = COALESCE($12, priority),
+          state = COALESCE($13, state),
           updated_at = NOW()
-      WHERE id = $12
+      WHERE id = $14
       RETURNING *
     `
     const res = await query(updateSql, [
       name || null,
       customer_name || null,
+      company || null,
       customer_email || null,
       customer_phone || null,
+      department || null,
       location || null,
       date_start || null,
       date_delivery || null,

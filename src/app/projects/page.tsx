@@ -2,8 +2,16 @@
 import { useEffect, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { PanelProject, ProjectState } from '@/lib/types'
-import { PROJECT_STATE_LABELS, formatDate, formatCurrency, projectStateFlow } from '@/lib/constants'
+import { PROJECT_STATE_LABELS, formatDate, projectStateFlow } from '@/lib/constants'
 import { useLanguage } from '@/context/LanguageContext'
+
+type DepartmentType = 'iron' | 'hangar' | 'electrical' | 'all'
+
+const DEPARTMENT_OPTIONS: { id: 'iron' | 'hangar' | 'electrical'; labelAr: string; labelEn: string; icon: string; color: string }[] = [
+  { id: 'iron', labelAr: 'مشاريع الحديد', labelEn: 'Iron Projects', icon: '🔩', color: '#f59e0b' },
+  { id: 'hangar', labelAr: 'مشاريع الهنجر', labelEn: 'Hangar Projects', icon: '🏭', color: '#06b6d4' },
+  { id: 'electrical', labelAr: 'مشاريع الكهرباء والتجميع', labelEn: 'Electrical & Assembly Projects', icon: '⚡', color: '#8b5cf6' },
+]
 
 export default function ProjectsPage() {
   const { lang, isRtl } = useLanguage()
@@ -13,29 +21,28 @@ export default function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<PanelProject | null>(null)
   const [deletingProject, setDeletingProject] = useState<PanelProject | null>(null)
   const [search, setSearch] = useState('')
-  const [filterState, setFilterState] = useState<ProjectState | 'all'>('all')
+  const [filterDepartment, setFilterDepartment] = useState<DepartmentType>('all')
 
   const [form, setForm] = useState({
     name: '',
     customer_name: '',
-    customer_email: '',
+    company: '',
     customer_phone: '',
-    location: '',
+    department: 'iron' as 'iron' | 'hangar' | 'electrical',
     date_start: '',
     date_delivery: '',
     description: '',
     job_order_number: '',
-    quotation_amount: 50000,
     priority: 'medium',
     state: 'new'
   })
 
-  useEffect(() => { loadProjects() }, [filterState])
+  useEffect(() => { loadProjects() }, [filterDepartment])
 
   async function loadProjects() {
     setLoading(true)
     try {
-      const url = `/api/projects?state=${filterState}&search=${encodeURIComponent(search)}`
+      const url = `/api/projects?department=${filterDepartment}&search=${encodeURIComponent(search)}`
       const res = await fetch(url)
       const data = await res.json()
       if (data && data.success && Array.isArray(data.data)) {
@@ -56,14 +63,13 @@ export default function ProjectsPage() {
     setForm({
       name: '',
       customer_name: '',
-      customer_email: '',
+      company: '',
       customer_phone: '',
-      location: '',
+      department: 'iron',
       date_start: new Date().toISOString().split('T')[0],
       date_delivery: '',
       description: '',
       job_order_number: '',
-      quotation_amount: 50000,
       priority: 'medium',
       state: 'new'
     })
@@ -75,14 +81,13 @@ export default function ProjectsPage() {
     setForm({
       name: proj.name || '',
       customer_name: proj.customer_name || '',
-      customer_email: (proj as any).customer_email || '',
+      company: (proj as any).company || '',
       customer_phone: (proj as any).customer_phone || '',
-      location: proj.location || '',
+      department: ((proj as any).department as any) || 'iron',
       date_start: proj.date_start ? proj.date_start.substring(0, 10) : '',
       date_delivery: proj.date_delivery ? proj.date_delivery.substring(0, 10) : '',
       description: proj.description || '',
       job_order_number: proj.job_order_number || '',
-      quotation_amount: (proj as any).quotation_amount || 50000,
       priority: (proj as any).priority || 'medium',
       state: proj.state || 'new'
     })
@@ -101,14 +106,13 @@ export default function ProjectsPage() {
             id: editingProject.id,
             name: form.name || form.customer_name,
             customer_name: form.customer_name,
-            customer_email: form.customer_email,
+            company: form.company,
             customer_phone: form.customer_phone,
-            location: form.location,
+            department: form.department,
             date_start: form.date_start,
             date_delivery: form.date_delivery,
             description: form.description,
             job_order_number: form.job_order_number,
-            quotation_amount: Number(form.quotation_amount),
             priority: form.priority,
             state: form.state
           })
@@ -129,14 +133,13 @@ export default function ProjectsPage() {
           body: JSON.stringify({
             name: form.name || form.customer_name,
             customer_name: form.customer_name,
-            customer_email: form.customer_email,
+            company: form.company,
             customer_phone: form.customer_phone,
-            location: form.location,
+            department: form.department,
             date_start: form.date_start,
             date_delivery: form.date_delivery,
             description: form.description,
             job_order_number: form.job_order_number,
-            quotation_amount: Number(form.quotation_amount),
             priority: form.priority
           })
         })
@@ -197,22 +200,30 @@ export default function ProjectsPage() {
     if (!p) return false
     const ref = (p.reference || '').toLowerCase()
     const cust = (p.customer_name || '').toLowerCase()
+    const comp = ((p as any).company || '').toLowerCase()
+    const name = (p.name || '').toLowerCase()
     const jo = (p.job_order_number || '').toLowerCase()
     const q = (search || '').toLowerCase()
-    const matchSearch = !q || ref.includes(q) || cust.includes(q) || jo.includes(q)
-    const matchState = filterState === 'all' || p.state === filterState
-    return matchSearch && matchState
+    const matchSearch = !q || ref.includes(q) || cust.includes(q) || comp.includes(q) || name.includes(q) || jo.includes(q)
+    
+    // Department filtering
+    let matchDept = true
+    if (filterDepartment !== 'all') {
+      const pDept = (p as any).department || 'iron'
+      matchDept = pDept === filterDepartment
+    }
+    return matchSearch && matchDept
   })
 
   const STATES = Object.keys(PROJECT_STATE_LABELS) as ProjectState[]
 
   return (
     <AppLayout
-      title="Electrical Panel Projects"
-      titleAr="مشاريع اللوحات الكهربائية ومراحل التصنيع"
+      title="Al-Masar Projects"
+      titleAr="مشاريع المسار"
       actions={
         <button className="btn btn-primary btn-sm" onClick={openCreateModal}>
-          {isRtl ? '+ إنشاء مشروع لوحة جديد' : '+ New Project'}
+          {isRtl ? '+ مشروع جديد' : '+ New Project'}
         </button>
       }
     >
@@ -222,27 +233,22 @@ export default function ProjectsPage() {
           <input
             className="input"
             style={{ width: 340 }}
-            placeholder={isRtl ? '...بحث بالمرجع، اسم العميل، أمر العمل' : 'Search reference, customer, job order...'}
+            placeholder={isRtl ? '...بحث بالمرجع، اسم المشروع، العميل، الشركة' : 'Search reference, project, client...'}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{isRtl ? 'المرحلة:' : 'Stage:'}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{isRtl ? 'المراحل والأقسام:' : 'Department / Stage:'}</span>
             <select
               className="input"
-              style={{ width: 180 }}
-              value={filterState}
-              onChange={e => setFilterState(e.target.value as any)}
+              style={{ width: 230, fontWeight: 600 }}
+              value={filterDepartment}
+              onChange={e => setFilterDepartment(e.target.value as any)}
             >
-              <option value="all">{isRtl ? 'جميع المراحل (10)' : 'All Stages (10)'}</option>
-              {STATES.map(s => {
-                const sLabel = PROJECT_STATE_LABELS[s]
-                return (
-                  <option key={s} value={s}>
-                    {sLabel ? (sLabel[lang] || sLabel.en) : s}
-                  </option>
-                )
-              })}
+              <option value="all">{isRtl ? 'جميع المراحل (الأقسام)' : 'All Stages (Departments)'}</option>
+              <option value="iron">{isRtl ? '1- مشاريع الحديد' : '1- Iron Projects'}</option>
+              <option value="hangar">{isRtl ? '2- مشاريع الهنجر' : '2- Hangar Projects'}</option>
+              <option value="electrical">{isRtl ? '3- مشاريع الكهرباء والتجميع' : '3- Electrical & Assembly'}</option>
             </select>
           </div>
         </div>
@@ -272,12 +278,31 @@ export default function ProjectsPage() {
           const nextState = projectStateFlow(proj.state)
           const nextStateInfo = nextState ? (PROJECT_STATE_LABELS[nextState] || { en: nextState, ar: nextState }) : null
 
+          const deptKey = (proj as any).department || 'iron'
+          const deptInfo = DEPARTMENT_OPTIONS.find(d => d.id === deptKey) || DEPARTMENT_OPTIONS[0]
+
           return (
             <div key={proj.id} className="card" style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 260 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                     <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>{proj.reference}</span>
+                    
+                    {/* Department badge */}
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        background: `${deptInfo.color}18`,
+                        color: deptInfo.color,
+                        border: `1px solid ${deptInfo.color}44`
+                      }}
+                    >
+                      {deptInfo.icon} {isRtl ? deptInfo.labelAr : deptInfo.labelEn}
+                    </span>
+
                     <span
                       className="state-pill"
                       style={{
@@ -294,22 +319,26 @@ export default function ProjectsPage() {
                   </div>
 
                   <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                    {proj.customer_name} {proj.name && proj.name !== proj.customer_name && `— ${proj.name}`}
+                    {proj.name}
                   </div>
+                  
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <span><strong>{isRtl ? 'العميل:' : 'Customer:'}</strong> {proj.customer_name}</span>
+                    {(proj as any).company && (proj as any).company !== proj.customer_name && (
+                      <span><strong>{isRtl ? 'الشركة / المؤسسة:' : 'Company:'}</strong> {(proj as any).company}</span>
+                    )}
+                  </div>
+
                   {proj.description && (
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, background: 'var(--bg-elevated)', padding: '6px 10px', borderRadius: 6 }}>
                       {proj.description}
                     </div>
                   )}
 
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
-                    {proj.location && <span>📍 {proj.location}</span>}
                     <span>📅 {isRtl ? 'البدء:' : 'Start:'} {formatDate(proj.date_start)}</span>
-                    <span>🚚 {isRtl ? 'التسليم:' : 'Delivery:'} {formatDate(proj.date_delivery)}</span>
-                    {(proj as any).quotation_amount > 0 && (
-                      <span style={{ color: '#10b981', fontWeight: 600 }}>💰 {formatCurrency((proj as any).quotation_amount)}</span>
-                    )}
-                    <span style={{ color: '#f59e0b', fontWeight: 600 }}>⭐ {proj.total_points || 0} {isRtl ? 'نقطة' : 'pts'}</span>
+                    {proj.date_delivery && <span>🚚 {isRtl ? 'التسليم:' : 'Delivery:'} {formatDate(proj.date_delivery)}</span>}
+                    {(proj as any).customer_phone && <span>📞 {(proj as any).customer_phone}</span>}
                   </div>
                 </div>
 
@@ -356,57 +385,60 @@ export default function ProjectsPage() {
       {/* Add / Edit Project Modal */}
       {showModal && (
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleSubmitProject}>
               <div className="modal-header">
-                <h3>{editingProject ? (isRtl ? 'تعديل بيانات المشروع' : 'Edit Project Details') : (isRtl ? 'إنشاء مشروع لوحة كهربائية جديد' : 'New Panel Project')}</h3>
+                <h3>{editingProject ? (isRtl ? 'تعديل بيانات المشروع' : 'Edit Project Details') : (isRtl ? 'مشروع جديد' : 'New Project')}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>✕</button>
               </div>
 
               <div style={{ padding: 24, display: 'grid', gap: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">{isRtl ? 'اسم المشروع' : 'Project Title'}</label>
+                    <label className="label">{isRtl ? 'اسم المشروع *' : 'Project Title *'}</label>
                     <input
+                      required
                       type="text"
                       className="input"
-                      placeholder={isRtl ? 'مشروع لوحة تحكم رئيسية MDB' : 'Main MDB Panel Project'}
+                      placeholder={isRtl ? 'مشروع لوحة تحكم رئيسية MDB' : 'Main MDB Project'}
                       value={form.name}
                       onChange={e => setForm({ ...form, name: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'اسم العميل / الجهة المالكة' : 'Customer / Client Name'}</label>
-                    <input
-                      required
-                      type="text"
+                    <label className="label">{isRtl ? 'القسم *' : 'Department *'}</label>
+                    <select
                       className="input"
-                      placeholder={isRtl ? 'شركة الكهرباء السعودية' : 'Saudi Electricity Co.'}
-                      value={form.customer_name}
-                      onChange={e => setForm({ ...form, customer_name: e.target.value })}
-                    />
+                      value={form.department}
+                      onChange={e => setForm({ ...form, department: e.target.value as any })}
+                    >
+                      <option value="iron">{isRtl ? 'أ- مشاريع الحديد' : 'Iron Projects'}</option>
+                      <option value="hangar">{isRtl ? 'ب- مشاريع الهنجر' : 'Hangar Projects'}</option>
+                      <option value="electrical">{isRtl ? 'ج- مشاريع الكهرباء والتجميع' : 'Electrical & Assembly Projects'}</option>
+                    </select>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
-                    <label className="label">{isRtl ? 'البريد الإلكتروني للعميل' : 'Customer Email'}</label>
+                    <label className="label">{isRtl ? 'اسم العميل *' : 'Customer Name *'}</label>
                     <input
-                      type="email"
+                      required
+                      type="text"
                       className="input"
-                      placeholder="client@company.com"
-                      value={form.customer_email}
-                      onChange={e => setForm({ ...form, customer_email: e.target.value })}
+                      placeholder={isRtl ? 'اسم المهندس / العميل' : 'Client contact name'}
+                      value={form.customer_name}
+                      onChange={e => setForm({ ...form, customer_name: e.target.value, company: form.company || e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'هاتف العميل' : 'Customer Phone'}</label>
+                    <label className="label">{isRtl ? 'الشركة / المؤسسة' : 'Company / Institution'}</label>
                     <input
                       type="text"
                       className="input"
-                      placeholder="+966 50 000 0000"
-                      value={form.customer_phone}
-                      onChange={e => setForm({ ...form, customer_phone: e.target.value })}
+                      placeholder={isRtl ? 'شركة الكهرباء / شركة المقاولات' : 'Company name'}
+                      value={form.company}
+                      onChange={e => setForm({ ...form, company: e.target.value })}
                     />
                   </div>
                 </div>
@@ -423,38 +455,18 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'قيمة العرض المالي (SAR)' : 'Quotation Amount (SAR)'}</label>
-                    <input
-                      type="number"
-                      className="input"
-                      value={form.quotation_amount}
-                      onChange={e => setForm({ ...form, quotation_amount: e.target.value as any })}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="label">{isRtl ? 'وصف اللوحة الكهربائية والمواصفات' : 'Panel Specification & Description'}</label>
-                  <textarea
-                    rows={2}
-                    className="input"
-                    placeholder={isRtl ? 'لوحة توزيع رئيسية MDB 2500A Form 4b مع قواطع Masterpact...' : 'Main Distribution Board MDB 2500A Form 4b...'}
-                    value={form.description}
-                    onChange={e => setForm({ ...form, description: e.target.value })}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-                  <div>
-                    <label className="label">{isRtl ? 'الموقع الجغرافي / المحطة' : 'Site Location'}</label>
+                    <label className="label">{isRtl ? 'هاتف العميل' : 'Customer Phone'}</label>
                     <input
                       type="text"
                       className="input"
-                      placeholder={isRtl ? 'الرياض - المنطقة الصناعية' : 'Riyadh Industrial Area'}
-                      value={form.location}
-                      onChange={e => setForm({ ...form, location: e.target.value })}
+                      placeholder="+966 50 000 0000"
+                      value={form.customer_phone}
+                      onChange={e => setForm({ ...form, customer_phone: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
                     <label className="label">{isRtl ? 'تاريخ البدء' : 'Start Date'}</label>
                     <input
@@ -473,6 +485,17 @@ export default function ProjectsPage() {
                       onChange={e => setForm({ ...form, date_delivery: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? 'تفاصيل وملاحظات المشروع' : 'Project Details & Notes'}</label>
+                  <textarea
+                    rows={3}
+                    className="input"
+                    placeholder={isRtl ? 'المواصفات الفنية، القياسات، وأي تفاصيل وملاحظات للمشروع...' : 'Technical specs, measurements, and project notes...'}
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                  />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -511,7 +534,7 @@ export default function ProjectsPage() {
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {editingProject ? (isRtl ? 'حفظ التعديلات' : 'Save Changes') : (isRtl ? 'إنشاء وبدء المشروع' : 'Create Project')}
+                  {editingProject ? (isRtl ? 'حفظ التعديلات' : 'Save Changes') : (isRtl ? 'حفظ المشروع' : 'Save Project')}
                 </button>
               </div>
             </form>
@@ -530,8 +553,8 @@ export default function ProjectsPage() {
             <div style={{ padding: 20 }}>
               <p style={{ color: 'var(--text-primary)', marginBottom: 12 }}>
                 {isRtl 
-                  ? `هل أنت متأكد من رغبتك في حذف المشروع "${deletingProject.reference} - ${deletingProject.customer_name}"؟`
-                  : `Are you sure you want to delete project "${deletingProject.reference} - ${deletingProject.customer_name}"?`
+                  ? `هل أنت متأكد من رغبتك في حذف المشروع "${deletingProject.reference} - ${deletingProject.name || deletingProject.customer_name}"؟`
+                  : `Are you sure you want to delete project "${deletingProject.reference} - ${deletingProject.name || deletingProject.customer_name}"?`
                 }
               </p>
               <p style={{ fontSize: 13, color: '#ef4444' }}>

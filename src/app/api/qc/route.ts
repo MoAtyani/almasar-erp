@@ -7,10 +7,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const department = searchParams.get('department')
     const status = searchParams.get('status')
+    const project_id = searchParams.get('project_id')
+    const search = searchParams.get('search')
 
     let sql = `
       SELECT q.*,
-        p.reference as project_reference, p.name as project_name,
+        p.reference as project_reference, p.name as project_name, p.company as project_company,
         o.order_number, o.item_description,
         b.batch_number,
         insp.full_name as inspector_name
@@ -29,6 +31,14 @@ export async function GET(req: NextRequest) {
     if (status && status !== 'all') {
       params.push(status)
       sql += ` AND q.status = $${params.length}`
+    }
+    if (project_id && project_id !== 'all') {
+      params.push(project_id)
+      sql += ` AND q.project_id = $${params.length}`
+    }
+    if (search && search.trim()) {
+      params.push(`%${search.trim()}%`)
+      sql += ` AND (p.reference ILIKE $${params.length} OR p.name ILIKE $${params.length} OR q.inspection_number ILIKE $${params.length})`
     }
     sql += ` ORDER BY q.created_at DESC`
 
@@ -50,7 +60,8 @@ export async function POST(req: NextRequest) {
       batch_id,
       project_id,
       checklists = [],
-      notes
+      notes,
+      status = 'pending'
     } = body
 
     const countRes = await query('SELECT COUNT(*) FROM qc_queue')
@@ -61,9 +72,18 @@ export async function POST(req: NextRequest) {
       INSERT INTO qc_queue (
         inspection_number, department, order_id, batch_id, project_id,
         status, checklists, notes
-      ) VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [inspectionNumber, department, order_id || null, batch_id || null, project_id || null, JSON.stringify(checklists), notes || null])
+    `, [
+      inspectionNumber,
+      department,
+      order_id || null,
+      batch_id || null,
+      project_id || null,
+      status || 'pending',
+      JSON.stringify(checklists),
+      notes || null
+    ])
 
     return NextResponse.json({ success: true, data: res.rows[0] })
   } catch (error: any) {

@@ -12,7 +12,7 @@ export const TRANSLATIONS: Record<string, { en: string; ar: string }> = {
   'nav.settings': { en: 'Settings', ar: 'الإعدادات' },
 
   'menu.dashboard': { en: 'Dashboard', ar: 'لوحة التحكم' },
-  'menu.projects': { en: 'Panel Projects', ar: 'مشاريع اللوحات' },
+  'menu.projects': { en: 'Al-Masar Projects', ar: 'مشاريع المسار' },
   'menu.crm': { en: 'Sales / CRM', ar: 'المبيعات / CRM' },
   'menu.engineering': { en: 'Engineering', ar: 'الهندسة والتصميم' },
   'menu.tasks': { en: 'Tasks & Production', ar: 'المهام والإنتاج' },

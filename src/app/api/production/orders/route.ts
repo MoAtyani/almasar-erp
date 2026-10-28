@@ -81,19 +81,16 @@ export async function POST(req: NextRequest) {
     const count = parseInt(countRes.rows[0].count, 10) + 1
     
     let deptPrefix = 'ORD'
-    if (department === 'factory_a') deptPrefix = 'FA'
-    else if (department === 'factory_b') deptPrefix = 'FB'
-    else if (department === 'electrical') deptPrefix = 'EL'
-    else if (department === 'casting') deptPrefix = 'CAST'
-    else if (department === 'laser') deptPrefix = 'LAS'
-    else if (department === 'painting') deptPrefix = 'PNT'
+    if (department === 'factory_a' || department === 'iron') deptPrefix = 'IRN'
+    else if (department === 'factory_b' || department === 'hangar') deptPrefix = 'HNG'
+    else if (department === 'electrical' || department === 'electrical_assembly') deptPrefix = 'EL'
+    else if (department === 'casting') deptPrefix = 'IRN'
+    else if (department === 'laser') deptPrefix = 'HNG'
+    else if (department === 'painting') deptPrefix = 'EL'
 
     const orderNumber = `ORD-${deptPrefix}-2026-${String(count).padStart(3, '0')}`
 
-    const initialStage = department === 'casting' ? (receipt_status === 'completed' ? 'completed' : 'receiving')
-      : department === 'laser' ? 'awaiting_materials'
-      : department === 'painting' ? 'receiving'
-      : 'awaiting_acceptance'
+    const initialStage = 'started'
 
     const insertSql = `
       INSERT INTO production_orders (
@@ -138,7 +135,8 @@ export async function PATCH(req: NextRequest) {
     const {
       id, action, user_id, comment, requires_painting, delay_reason, notes,
       receipt_status, stage, cover_type, is_new_type, required_measurement,
-      fixed_measurements, cable_tray_bend, details_notes, quantity, deadline, item_description
+      fixed_measurements, cable_tray_bend, details_notes, quantity, deadline, item_description,
+      paint_status
     } = body
 
     if (!id) {
@@ -154,8 +152,48 @@ export async function PATCH(req: NextRequest) {
     const updateFields: string[] = ['updated_at = NOW()']
     const params: any[] = [id]
 
-    // Casting department actions
-    if (action === 'update_casting_status') {
+    // Iron department actions
+    if (action === 'update_iron_stage') {
+      const nextStage = stage || (order.stage === 'started' ? 'in_painting' : 'completed')
+      params.push(nextStage)
+      updateFields.push(`stage = $${params.length}`)
+      if (receipt_status) {
+        params.push(receipt_status)
+        updateFields.push(`receipt_status = $${params.length}`)
+      }
+      if (paint_status) {
+        params.push(paint_status)
+        updateFields.push(`paint_status = $${params.length}`)
+      }
+    }
+    // Hangar department actions
+    else if (action === 'update_hangar_stage') {
+      const nextStage = stage || (order.stage === 'started' ? 'in_painting' : order.stage === 'in_painting' ? 'ready_for_delivery' : 'completed')
+      params.push(nextStage)
+      updateFields.push(`stage = $${params.length}`)
+      if (receipt_status) {
+        params.push(receipt_status)
+        updateFields.push(`receipt_status = $${params.length}`)
+      }
+    }
+    // Electrical department actions
+    else if (action === 'update_electrical_stage') {
+      const nextStage = stage || (order.stage === 'started' ? 'ready_for_inspection' : 'completed')
+      params.push(nextStage)
+      updateFields.push(`stage = $${params.length}`)
+      if (receipt_status) {
+        params.push(receipt_status)
+        updateFields.push(`receipt_status = $${params.length}`)
+      }
+    }
+    // Toggle painting status
+    else if (action === 'toggle_painting') {
+      const nextPaint = paint_status !== undefined ? paint_status : (order.paint_status === 'in_painting' ? 'no_painting_needed' : 'in_painting')
+      params.push(nextPaint)
+      updateFields.push(`paint_status = $${params.length}`)
+    }
+    // Legacy casting department actions
+    else if (action === 'update_casting_status') {
       const nextReceipt = receipt_status || (order.receipt_status === 'receiving' ? 'completed' : 'receiving')
       const nextStage = nextReceipt === 'completed' ? 'completed' : 'receiving'
       params.push(nextReceipt)

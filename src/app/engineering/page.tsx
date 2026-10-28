@@ -47,7 +47,7 @@ const MOCK_ENG_TASKS = [
     name_ar: 'إعداد جدول الكميات (BoQ) وتخمين تكلفة اللوحة والمكونات',
     project_ref: 'PJ-2026-004',
     customer: 'Nesma Infrastructure',
-    engineer: 'Eng. Tariq Al-Masar',
+    engineer: 'Eng. Yousef Basbous',
     status: 'started',
     stage: 'Estimation Phase',
     progress: 40,
