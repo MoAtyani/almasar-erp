@@ -55,10 +55,11 @@ const NAV_ITEMS = [
     ],
   },
   {
-    section: 'Settings',
-    sectionAr: 'الإعدادات',
+    section: 'Settings & Account',
+    sectionAr: 'الإعدادات والحساب',
     items: [
-      { href: '/config', icon: '⚙', label: 'Configuration', labelAr: 'الإعدادات' },
+      { href: '/profile', icon: '👤', label: 'Profile & Account', labelAr: 'الملف الشخصي والحساب' },
+      { href: '/config', icon: '⚙', label: 'Configuration', labelAr: 'إعدادات النظام' },
     ],
   },
 ]
@@ -70,50 +71,29 @@ interface Props {
   actions?: React.ReactNode
 }
 
-const DEFAULT_PROFILE: Profile & { permissions?: any; is_manager?: boolean } = {
-  id: 'usr-manager-001',
-  full_name: 'Eng. Yousef Basbous',
-  full_name_ar: 'م. يوسف بصبوص',
-  email: 'manager@almasar-switchgear.com',
-  role: 'system_admin',
-  department: 'Executive Management',
-  reward_points: 1250,
-  is_active: true,
-  is_manager: true,
-  permissions: {
-    can_add: true,
-    can_edit: true,
-    can_delete: true,
-    manage_users: true,
-    full_access: true
-  },
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-}
-
 export default function AppLayout({ children, title, titleAr, actions }: Props) {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
   const { lang, toggleLang, isRtl } = useLanguage()
   const { theme, toggleTheme, isLight } = useTheme()
-  const [profile, setProfile] = useState<any>(DEFAULT_PROFILE)
+  const [profile, setProfile] = useState<any>(null)
+  const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('almasar_user') : null
     if (stored) {
       try {
-        setProfile(JSON.parse(stored))
-      } catch {
-        setProfile(DEFAULT_PROFILE)
-      }
-    } else {
-      setProfile(DEFAULT_PROFILE)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('almasar_user', JSON.stringify(DEFAULT_PROFILE))
-      }
+        const parsed = JSON.parse(stored)
+        if (parsed && parsed.email) {
+          setProfile(parsed)
+          setAuthChecked(true)
+          return
+        }
+      } catch {}
     }
-  }, [])
+    // If not authenticated, redirect immediately to login
+    router.replace('/login')
+  }, [router])
 
   async function handleLogout() {
     try {
@@ -121,6 +101,28 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
     } catch {}
     if (typeof window !== 'undefined') localStorage.removeItem('almasar_user')
     router.push('/login')
+  }
+
+  // Show clean loading spinner while checking auth status
+  if (!authChecked || !profile) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary, #0f172a)' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted, #94a3b8)' }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            border: '3px solid rgba(255,255,255,0.1)',
+            borderTopColor: 'var(--accent, #38bdf8)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 14px'
+          }} />
+          <div style={{ fontSize: 14, fontWeight: 500 }}>
+            {isRtl ? 'جاري التحقق من جلسة الدخول...' : 'Verifying user session...'}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const isManager = profile?.is_manager || ['system_admin', 'company_owner', 'general_manager', 'admin'].includes(profile?.role)
@@ -163,7 +165,7 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`sidebar-item ${pathname.startsWith(item.href) ? 'active' : ''}`}
+                  className={`sidebar-item ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? 'active' : ''}`}
                 >
                   <span style={{ fontSize: 16 }}>{item.icon}</span>
                   <span>{isRtl ? item.labelAr : item.label}</span>
@@ -173,14 +175,40 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
           ))}
         </nav>
 
+        {/* User Profile Card in Sidebar Footer (Clickable to /profile) */}
         <div className="sidebar-footer">
           {profile && (
-            <div className="user-card" style={{
-              border: isManager ? (isLight ? '1.5px solid #d97706' : '1.5px solid #eab308') : undefined,
-              background: isManager ? (isLight ? 'rgba(217, 119, 6, 0.08)' : 'rgba(234, 179, 8, 0.08)') : undefined
-            }}>
-              <div className="user-avatar" style={{ background: isManager ? 'linear-gradient(135deg, #eab308, #ca8a04)' : undefined, color: isManager ? '#000' : undefined }}>
-                {isManager ? '👑' : (isRtl && profile.full_name_ar ? profile.full_name_ar : profile.full_name).charAt(0).toUpperCase()}
+            <div
+              className="user-card"
+              onClick={() => router.push('/profile')}
+              title={isRtl ? 'اضغط لعرض وتعديل الملف الشخصي وإعدادات الحساب' : 'Click to view & edit your profile'}
+              style={{
+                cursor: 'pointer',
+                border: isManager ? (isLight ? '1.5px solid #d97706' : '1.5px solid #eab308') : '1px solid var(--border)',
+                background: isManager ? (isLight ? 'rgba(217, 119, 6, 0.08)' : 'rgba(234, 179, 8, 0.08)') : 'var(--bg-card)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <div
+                className="user-avatar"
+                style={{
+                  background: profile.avatar_url ? 'none' : (isManager ? 'linear-gradient(135deg, #eab308, #ca8a04)' : undefined),
+                  color: isManager ? '#000' : undefined,
+                  overflow: 'hidden',
+                  position: 'relative'
+                }}
+              >
+                {profile.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={profile.full_name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                ) : isManager ? (
+                  '👑'
+                ) : (
+                  (isRtl && profile.full_name_ar ? profile.full_name_ar : profile.full_name || 'U').charAt(0).toUpperCase()
+                )}
               </div>
               <div className="user-info">
                 <div className="user-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -190,7 +218,24 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
                   {isManager ? (isRtl ? 'المدير العام (تحكم كامل)' : 'General Manager (Full Access)') : ((ROLE_LABELS as any)[profile?.role]?.[lang] || profile?.role)}
                 </div>
               </div>
-              <button onClick={handleLogout} title={isRtl ? 'تسجيل الخروج' : 'Logout'} style={{ background: 'none', padding: 4, color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', border: 'none' }}>⎋</button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleLogout()
+                }}
+                title={isRtl ? 'تسجيل الخروج' : 'Logout'}
+                style={{
+                  background: 'none',
+                  padding: 6,
+                  color: 'var(--text-muted)',
+                  fontSize: 16,
+                  cursor: 'pointer',
+                  border: 'none',
+                  borderRadius: 4
+                }}
+              >
+                ⎋
+              </button>
             </div>
           )}
         </div>
@@ -231,4 +276,3 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
     </div>
   )
 }
-

@@ -2,131 +2,107 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useTheme } from '@/context/ThemeContext'
+import { useLanguage } from '@/context/LanguageContext'
 
-interface RoleCredential {
+interface QuickRole {
   id: string
-  role: string
-  titleEn: string
   titleAr: string
+  titleEn: string
+  role: string
   email: string
   password: string
+  icon: string
   badge: string
-  badgeClass: string
-  descriptionEn: string
-  descriptionAr: string
-  permissions: string[]
-  redirectUrl: string
 }
 
-const PRESET_ROLES: RoleCredential[] = [
+const QUICK_ROLES: QuickRole[] = [
   {
     id: 'manager',
+    titleAr: 'المدير العام (تحكم كامل)',
+    titleEn: 'General Manager (Full Access)',
     role: 'system_admin',
-    titleEn: 'General Manager & Super Admin',
-    titleAr: 'المدير العام (صلاحيات كاملة شاملة)',
     email: 'manager@almasar-switchgear.com',
     password: 'Almasar@2026',
-    badge: 'Full Access | تحكم كامل',
-    badgeClass: 'badge-manager',
-    descriptionEn: 'Full privileges: add, edit, and delete all projects, sales, templates, casting/laser/painting production, warehouse, finance, and user accounts & roles.',
-    descriptionAr: 'صلاحيات مطلقة: إضافة، تعديل، وحذف المشاريع، المبيعات، النماذج، خطوط الصب والليزر والطلاء، المستودع، والتحكم بإدارة المستخدمين والصلاحيات.',
-    permissions: ['إدارة وحذف المستخدمين', 'إضافة وتعديل وحذف كل الأقسام', 'الصب والليزر والطلاء', 'المستودع والمبيعات والمالية'],
-    redirectUrl: '/dashboard'
-  },
-  {
-    id: 'sales',
-    role: 'sales_officer',
-    titleEn: 'Sales Manager & Estimation',
-    titleAr: 'مدير المبيعات والنماذج',
-    email: 'sales@almasar-switchgear.com',
-    password: 'Sales@2026',
-    badge: 'Sales & Templates | المبيعات',
-    badgeClass: 'badge-sales',
-    descriptionEn: 'Manages sales projects, customer leads, pricing outcomes, delivery statuses, and reusable switchgear templates catalog.',
-    descriptionAr: 'إدارة مشاريع البيع، العملاء، نتائج الصفقات، الحالات (قيد التصنيع، جاهز، تم التسليم)، وكتالوج النماذج.',
-    permissions: ['المبيعات ومشاريع الإنتاج', 'كتالوج النماذج', 'التسعير وعروض الأسعار'],
-    redirectUrl: '/crm'
+    icon: '👑',
+    badge: 'Full Access | تحكم كامل'
   },
   {
     id: 'production',
-    role: 'production_manager',
-    titleEn: 'Production & Factory Director',
     titleAr: 'مدير الإنتاج والتصنيع',
+    titleEn: 'Production Manager',
+    role: 'production_manager',
     email: 'production@almasar-switchgear.com',
     password: 'Prod@2026',
-    badge: 'Production & Tasks | الإنتاج',
-    badgeClass: 'badge-prod',
-    descriptionEn: 'Oversees manufacturing lines: Casting (standard/glass cover), Laser & Bending measurements, Painting & showroom notices, and technician task workflows.',
-    descriptionAr: 'الإشراف على خطوط التصنيع: قسم الصب (عادي/زجاج غطاء)، قسم الليزر والتكسير، قسم الطلاء، ومسار مهام الفنيين.',
-    permissions: ['قسم الصب (Casting)', 'قسم الليزر والتكسير', 'قسم الطلاء والتشطيب', 'أوامر التصنيع وتعيين المهام'],
-    redirectUrl: '/tasks'
+    icon: '⚙️',
+    badge: 'Manufacturing | خطوط الإنتاج'
   },
   {
-    id: 'technician',
-    role: 'technician',
-    titleEn: 'Panel Assembly & Factory Technician',
-    titleAr: 'فني لوحات وتصنيع',
-    email: 'technician@almasar-switchgear.com',
-    password: 'Tech@2026',
-    badge: 'Tasks & Progress | الفنيين',
-    badgeClass: 'badge-tech',
-    descriptionEn: 'Executes assigned fabrication tasks, checks wiring diagrams, updates completion status, and logs working hours.',
-    descriptionAr: 'تنفيذ المهام المسندة، قراءة المخططات، تحديث نسبة الإنجاز، وتسجيل ساعات العمل في الورشة.',
-    permissions: ['قائمة المهام المسندة', 'بدء وإنهاء المهام', 'نقاط المكافأة والأداء'],
-    redirectUrl: '/tasks'
-  },
-  {
-    id: 'warehouse',
-    role: 'warehouse_officer',
-    titleEn: 'Warehouse & Logistics Keeper',
-    titleAr: 'أمين المستودع والمخزون',
-    email: 'warehouse@almasar-switchgear.com',
-    password: 'Store@2026',
-    badge: 'Inventory | المستودع',
-    badgeClass: 'badge-wh',
-    descriptionEn: 'Tracks inventory on hand, reorder thresholds, component barcodes, and issues raw materials & parts to projects.',
-    descriptionAr: 'متابعة المخزون المتوفر، حد إعادة الطلب، صرف المواد والقطع للمشاريع والفنيين.',
-    permissions: ['إدارة عناصر المخزون', 'صرف القطع للمشاريع', 'تنبيهات النواقص'],
-    redirectUrl: '/warehouse'
+    id: 'sales',
+    titleAr: 'مدير المبيعات والمشاريع',
+    titleEn: 'Sales & Estimation Manager',
+    role: 'sales_officer',
+    email: 'sales@almasar-switchgear.com',
+    password: 'Sales@2026',
+    icon: '💼',
+    badge: 'Sales & CRM | المبيعات'
   },
   {
     id: 'qc',
+    titleAr: 'مهندس فحص وضبط الجودة',
+    titleEn: 'QC Inspection Lead',
     role: 'qc_inspector',
-    titleEn: 'Quality Control Inspector',
-    titleAr: 'مفتش الجودة والمطابقة',
     email: 'qc@almasar-switchgear.com',
     password: 'Qc@2026',
-    badge: 'Quality & Testing | الجودة',
-    badgeClass: 'badge-qc',
-    descriptionEn: 'Performs dielectric and routine tests, verifies material quality inspections in laser department, and issues QC certificates.',
-    descriptionAr: 'إجراء الفحوصات العازلة والاختبارات، فحص جودة المواد في قسم الليزر، وإصدار شهادات المطابقة.',
-    permissions: ['سجل فحوصات الجودة', 'اعتماد ومطابقة اللوحات', 'تقارير العيوب'],
-    redirectUrl: '/qc'
+    icon: '🔍',
+    badge: 'Quality Control | ضبط الجودة'
+  },
+  {
+    id: 'warehouse',
+    titleAr: 'أمين المستودع والمخزون',
+    titleEn: 'Warehouse & Inventory Officer',
+    role: 'warehouse_officer',
+    email: 'warehouse@almasar-switchgear.com',
+    password: 'Store@2026',
+    icon: '🏭',
+    badge: 'Inventory | المستودع'
+  },
+  {
+    id: 'technician',
+    titleAr: 'فني التجميع واللوحات',
+    titleEn: 'Panel Assembly Technician',
+    role: 'technician',
+    email: 'technician@almasar-switchgear.com',
+    password: 'Tech@2026',
+    icon: '⚡',
+    badge: 'Technician | الورشة'
   }
 ]
 
 export default function LoginPage() {
-  const [selectedRole, setSelectedRole] = useState<RoleCredential>(PRESET_ROLES[0])
-  const [email, setEmail] = useState(PRESET_ROLES[0].email)
-  const [password, setPassword] = useState(PRESET_ROLES[0].password)
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [copiedField, setCopiedField] = useState<string | null>(null)
   const router = useRouter()
   const { theme, toggleTheme, isLight } = useTheme()
+  const { lang, toggleLang, isRtl } = useLanguage()
 
-  function handleSelectRole(preset: RoleCredential) {
-    setSelectedRole(preset)
-    setEmail(preset.email)
-    setPassword(preset.password)
-    setError('')
-  }
+  const [email, setEmail] = useState('manager@almasar-switchgear.com')
+  const [password, setPassword] = useState('Almasar@2026')
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [showQuickRoles, setShowQuickRoles] = useState(true)
 
-  async function handleLogin(e?: React.FormEvent) {
-    if (e) e.preventDefault()
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!email.trim()) {
+      setError(isRtl ? 'يرجى إدخال البريد الإلكتروني' : 'Please enter your email')
+      return
+    }
+    if (!password) {
+      setError(isRtl ? 'يرجى إدخال كلمة المرور' : 'Please enter your password')
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -136,993 +112,369 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password })
       })
-
       const data = await res.json()
 
-      if (data.success && data.user) {
-        // Store user in localStorage for client-side state
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('almasar_user', JSON.stringify(data.user))
-        }
-
-        // Redirect based on user role
-        if (data.user.role === 'technician') {
-          router.push('/tasks')
-        } else if (data.user.role === 'sales_officer') {
-          router.push('/crm')
-        } else {
-          router.push('/dashboard')
-        }
-      } else {
-        setError(data.error || 'Authentication failed. Please verify credentials.')
-      }
-    } catch (err: any) {
-      console.error('Login error:', err)
-      setError('Connection error with authentication service.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleOneClickManagerLogin() {
-    setEmail('manager@almasar-switchgear.com')
-    setPassword('Almasar@2026')
-    setLoading(true)
-    setError('')
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'manager@almasar-switchgear.com',
-          password: 'Almasar@2026',
-          quick_login: true
-        })
-      })
-      const data = await res.json()
       if (data.success && data.user) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('almasar_user', JSON.stringify(data.user))
         }
         router.push('/dashboard')
       } else {
-        setError(data.error || 'Failed to login as manager')
+        setError(data.error || (isRtl ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password'))
       }
     } catch (err: any) {
-      setError('Connection error')
+      console.error('Login error:', err)
+      setError(isRtl ? 'تعذر الاتصال بخادم المصادقة، يرجى المحاولة ثانية' : 'Connection error with authentication server')
     } finally {
       setLoading(false)
     }
   }
 
-  function copyToClipboard(text: string, field: string) {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text)
-      setCopiedField(field)
-      setTimeout(() => setCopiedField(null), 2000)
-    }
+  function handleSelectQuickRole(roleItem: QuickRole) {
+    setEmail(roleItem.email)
+    setPassword(roleItem.password)
+    setError('')
   }
 
   return (
-    <div className="login-page-v2" dir="rtl">
-      {/* Background Orbs */}
-      <div className="login-orb orb-primary" />
-      <div className="login-orb orb-accent" />
-
-      <div className="login-container">
-        {/* Top bar with Theme Switcher */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+    <div
+      dir={isRtl ? 'rtl' : 'ltr'}
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '24px 16px',
+        background: isLight 
+          ? 'radial-gradient(circle at 50% 10%, #e0f2fe 0%, #f8fafc 50%, #f1f5f9 100%)' 
+          : 'radial-gradient(circle at 50% 10%, #0c4a6e 0%, #0f172a 50%, #020617 100%)',
+        color: 'var(--text-primary)',
+        fontFamily: 'inherit',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Top Bar Switchers */}
+      <div style={{
+        width: '100%',
+        maxWidth: 520,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 10,
+        marginBottom: 12
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {isRtl ? 'نظام المسار المتكامل v2.6' : 'Al-Masar ERP v2.6'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             type="button"
             onClick={toggleTheme}
             className="theme-btn"
-            title={isLight ? 'التبديل إلى الوضع الليلي (Dark)' : 'التبديل إلى الوضع النهاري (Light)'}
             style={{
-              background: isLight ? '#ffffff' : 'rgba(30, 41, 59, 0.8)',
-              borderColor: isLight ? '#cbd5e1' : 'rgba(255, 255, 255, 0.15)',
-              color: isLight ? '#0f172a' : '#f1f5f9',
-              boxShadow: isLight ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
-              padding: '8px 14px',
-              fontSize: '13px',
-              fontWeight: 700,
-              borderRadius: '10px'
+              padding: '6px 12px',
+              fontSize: 13,
+              borderRadius: 8,
+              background: isLight ? '#ffffff' : 'rgba(30, 41, 59, 0.7)',
+              border: `1px solid ${isLight ? '#cbd5e1' : 'rgba(255, 255, 255, 0.15)'}`
             }}
           >
-            <span style={{ fontSize: 15 }}>{isLight ? '🌙' : '☀️'}</span>
-            <span>{isLight ? 'الوضع الليلي (Dark)' : 'الوضع النهاري (Light)'}</span>
+            <span>{isLight ? '🌙 داكن' : '☀️ فاتح'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={toggleLang}
+            className="lang-btn"
+            style={{
+              padding: '6px 12px',
+              fontSize: 13,
+              borderRadius: 8,
+              background: isLight ? '#ffffff' : 'rgba(30, 41, 59, 0.7)',
+              border: `1px solid ${isLight ? '#cbd5e1' : 'rgba(255, 255, 255, 0.15)'}`
+            }}
+          >
+            {lang === 'en' ? '🇸🇦 عربي' : '🇬🇧 English'}
           </button>
         </div>
+      </div>
 
-        {/* Header Branding */}
-        <div className="login-header-box">
-          {/* Logo */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+      {/* Main Login Card */}
+      <div
+        className="card"
+        style={{
+          width: '100%',
+          maxWidth: 480,
+          padding: '32px 28px',
+          borderRadius: 20,
+          boxShadow: isLight
+            ? '0 20px 40px -15px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)'
+            : '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)',
+          background: isLight ? '#ffffff' : 'rgba(15, 23, 42, 0.85)',
+          backdropFilter: 'blur(16px)',
+          zIndex: 10
+        }}
+      >
+        {/* Brand Header */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'inline-block', marginBottom: 12 }}>
             <Image
               src="/logo.jpg"
               alt="Al-Masar Switchgear"
-              width={220}
-              height={90}
+              width={200}
+              height={85}
               style={{
                 objectFit: 'contain',
-                maxHeight: 90,
+                maxHeight: 76,
                 borderRadius: 10,
-                filter: isLight ? 'none' : 'brightness(0.9) contrast(1.1)',
+                filter: isLight ? 'none' : 'brightness(0.95) contrast(1.05)'
               }}
               priority
             />
           </div>
-          {/* Company Details */}
-          <div style={{
-            textAlign: 'center',
-            marginBottom: 10,
-            padding: '10px 16px',
-            background: isLight ? 'rgba(2, 132, 199, 0.06)' : 'rgba(14, 165, 233, 0.08)',
-            borderRadius: 10,
-            border: `1px solid ${isLight ? 'rgba(2, 132, 199, 0.15)' : 'rgba(14, 165, 233, 0.15)'}`,
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-              شركة المسار لصناعة اللوحات الكهربائية
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-              <span>📞 962 6 4123035</span>
-              <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>
-              <span>📠 Fax: 962 6 4123034</span>
-              <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>
-              <span>📱 Mob: 962 7 5293111</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              <span>🌐 </span>
-              <a href="https://www.almasarjo.com" target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--accent)', textDecoration: 'none' }}>www.almasarjo.com</a>
-              <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>
-              <span>✉️ </span>
-              <a href="mailto:info@almasarjo.com"
-                style={{ color: 'var(--accent)', textDecoration: 'none' }}>info@almasarjo.com</a>
-            </div>
-          </div>
-          <h1 className="login-main-title">نظام تسجيل الدخول وإدارة الصلاحيات</h1>
-          <p className="login-subtitle">
-            نظام دخول مركزي آمن لكافة مستويات المستخدمين (الإدارة العامة، الإنتاج والصب والليزر والطلاء، المبيعات والنماذج، والمستودع)
+          <h2 style={{ fontSize: 20, fontWeight: 800, margin: '4px 0 2px', color: 'var(--text-primary)' }}>
+            {isRtl ? 'شركة المسار لصناعة اللوحات الكهربائية' : 'Al-Masar Switchgear Factory'}
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            {isRtl ? 'بوابة تسجيل الدخول وإدارة عمليات المصنع' : 'Unified Enterprise & Factory Management Portal'}
           </p>
         </div>
 
-        <div className="login-split-grid">
-          {/* Left Column: Manager & Role Selector Box */}
-          <div className="login-roles-pane">
-            {/* Highlighted Manager Box */}
-            <div className="manager-highlight-card">
-              <div className="manager-card-top">
-                <div className="manager-crown-icon">👑</div>
-                <div>
-                  <div className="manager-title-row">
-                    <span className="manager-title">حساب المدير العام (General Manager)</span>
-                    <span className="tag-full-access">صلاحيات كاملة شاملة</span>
-                  </div>
-                  <div className="manager-subtitle-en">Full Admin Access (Add, Edit & Delete Everything + Users)</div>
-                </div>
-              </div>
+        {/* Error Alert */}
+        {error && (
+          <div style={{
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#ef4444',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 18
+          }}>
+            <span>⚠️</span>
+            <span>{error}</span>
+          </div>
+        )}
 
-              <p className="manager-access-note">
-                المدير العام يمتلك صلاحية مطلقة للإضافة والتعديل والحذف لكافة المشاريع، المبيعات، النماذج، خطوط الصب والليزر والطلاء، المستودع، <strong>وإضافة وتعديل وحذف المستخدمين وتعيين أدوارهم</strong>.
-              </p>
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Email */}
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
+              {isRtl ? 'البريد الإلكتروني / اسم المستخدم' : 'Email Address / Username'}
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="email"
+                required
+                className="input"
+                style={{ width: '100%', paddingLeft: isRtl ? 14 : 38, paddingRight: isRtl ? 38 : 14, height: 42, fontSize: 14 }}
+                placeholder="name@almasar-switchgear.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+              <span style={{
+                position: 'absolute',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                [isRtl ? 'right' : 'left']: 12,
+                color: 'var(--text-muted)',
+                fontSize: 16
+              }}>
+                ✉️
+              </span>
+            </div>
+          </div>
 
-              <div className="credentials-chip-row">
-                <div className="cred-chip" onClick={() => copyToClipboard('manager@almasar-switchgear.com', 'mgr_email')}>
-                  <span className="cred-label">البريد:</span>
-                  <span className="cred-val">manager@almasar-switchgear.com</span>
-                  <span className="copy-icon">{copiedField === 'mgr_email' ? '✓ نُسخ' : '📋'}</span>
-                </div>
-                <div className="cred-chip" onClick={() => copyToClipboard('Almasar@2026', 'mgr_pw')}>
-                  <span className="cred-label">كلمة المرور:</span>
-                  <span className="cred-val">Almasar@2026</span>
-                  <span className="copy-icon">{copiedField === 'mgr_pw' ? '✓ نُسخ' : '📋'}</span>
-                </div>
-              </div>
-
+          {/* Password */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                {isRtl ? 'كلمة المرور' : 'Password'}
+              </label>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                className="input"
+                style={{ width: '100%', paddingLeft: isRtl ? 40 : 38, paddingRight: isRtl ? 38 : 40, height: 42, fontSize: 14 }}
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+              <span style={{
+                position: 'absolute',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                [isRtl ? 'right' : 'left']: 12,
+                color: 'var(--text-muted)',
+                fontSize: 16
+              }}>
+                🔒
+              </span>
               <button
                 type="button"
-                className="btn-manager-direct"
-                onClick={handleOneClickManagerLogin}
-                disabled={loading}
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  [isRtl ? 'left' : 'right']: 10,
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: 4,
+                  fontSize: 16
+                }}
               >
-                {loading ? 'جاري التحقق والدخول...' : '🚀 الدخول الفوري المباشر بصلاحيات المدير العام'}
+                {showPassword ? '👁️' : '🕶️'}
               </button>
             </div>
+          </div>
 
-            {/* Quick Role Switcher */}
-            <div className="roles-selector-section">
-              <div className="roles-section-title">
-                <span>أو اختر دور المستخدم للاختبار السريع:</span>
-                <span className="roles-count">({PRESET_ROLES.length} أدوار معرفة)</span>
-              </div>
+          {/* Remember me & Helper */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                style={{ accentColor: 'var(--accent)' }}
+              />
+              <span>{isRtl ? 'تذكر بيانات تسجيل الدخول' : 'Remember my login'}</span>
+            </label>
+            <span style={{ color: 'var(--accent)', fontSize: 12 }}>
+              {isRtl ? 'دخول آمن ومشفّر' : 'Secured SSL'}
+            </span>
+          </div>
 
-              <div className="roles-selector-grid">
-                {PRESET_ROLES.map((r) => {
-                  const isSelected = selectedRole.id === r.id
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      className={`role-select-card ${isSelected ? 'active' : ''}`}
-                      onClick={() => handleSelectRole(r)}
-                    >
-                      <div className="role-card-header">
-                        <span className="role-card-title">{r.titleAr}</span>
-                        <span className={`role-badge-pill ${r.badgeClass}`}>{r.badge}</span>
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary"
+            style={{
+              height: 44,
+              fontSize: 15,
+              fontWeight: 700,
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: 4,
+              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)'
+            }}
+          >
+            {loading ? (
+              <>
+                <span className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                <span>{isRtl ? 'جاري التحقق والدخول...' : 'Signing in...'}</span>
+              </>
+            ) : (
+              <span>{isRtl ? 'تسجيل الدخول إلى النظام ←' : 'Sign In to Dashboard →'}</span>
+            )}
+          </button>
+        </form>
+
+        {/* Quick Demo Roles Section */}
+        <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 10,
+            cursor: 'pointer'
+          }}
+          onClick={() => setShowQuickRoles(!showQuickRoles)}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+              {isRtl ? '⚡ الدخول التجريبي السريع حسب الصلاحية:' : '⚡ Quick Test Accounts by Role:'}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--accent)' }}>
+              {showQuickRoles ? '▲' : '▼'}
+            </span>
+          </div>
+
+          {showQuickRoles && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {QUICK_ROLES.map(r => {
+                const isActive = email === r.email
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => handleSelectQuickRole(r)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      border: isActive
+                        ? '1.5px solid var(--accent)'
+                        : `1px solid ${isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.08)'}`,
+                      background: isActive
+                        ? (isLight ? 'rgba(2, 132, 199, 0.08)' : 'rgba(56, 189, 248, 0.12)')
+                        : (isLight ? '#f8fafc' : 'rgba(255, 255, 255, 0.03)'),
+                      textAlign: isRtl ? 'right' : 'left',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{r.icon}</span>
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden'
+                      }}>
+                        {isRtl ? r.titleAr : r.titleEn}
                       </div>
-                      <div className="role-card-email">{r.email}</div>
-                      <div className="role-card-desc">{r.descriptionAr}</div>
-                    </button>
-                  )
-                })}
-              </div>
+                      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {r.role === 'system_admin' ? (isRtl ? 'تحكم كامل' : 'Full Admin') : r.email.split('@')[0]}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
-          </div>
-
-          {/* Right Column: Interactive Login Form */}
-          <div className="login-form-pane">
-            <div className="login-card-inner">
-              <div className="login-card-header">
-                <div className="login-avatar-icon">
-                  {selectedRole.id === 'manager' ? '👑' : selectedRole.id === 'sales' ? '💼' : selectedRole.id === 'production' ? '⚙️' : '⚡'}
-                </div>
-                <div>
-                  <h2 className="login-card-title">تسجيل الدخول للنظام</h2>
-                  <p className="login-card-sub">
-                    الدخول الحالي المختار: <strong>{selectedRole.titleAr}</strong>
-                  </p>
-                </div>
-              </div>
-
-              {error && (
-                <div className="login-alert-error">
-                  <span className="alert-icon">⚠️</span>
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleLogin} className="login-form-body">
-                <div className="form-group-v2">
-                  <label className="form-label-v2">
-                    البريد الإلكتروني / Email
-                  </label>
-                  <div className="input-wrap">
-                    <input
-                      type="email"
-                      className="form-input-v2"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="user@almasar-switchgear.com"
-                      required
-                      autoComplete="email"
-                    />
-                    <span className="input-icon">✉️</span>
-                  </div>
-                </div>
-
-                <div className="form-group-v2">
-                  <div className="label-flex-row">
-                    <label className="form-label-v2">كلمة المرور / Password</label>
-                    <span className="pwd-hint">الافتراضية: {selectedRole.password}</span>
-                  </div>
-                  <div className="input-wrap">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      className="form-input-v2"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      className="btn-toggle-eye"
-                      onClick={() => setShowPassword(!showPassword)}
-                      tabIndex={-1}
-                    >
-                      {showPassword ? '👁️' : '🔒'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Permissions summary of active role */}
-                <div className="role-perms-box">
-                  <div className="perms-title">صلاحيات هذا الحساب:</div>
-                  <div className="perms-tag-cloud">
-                    {selectedRole.permissions.map((p, idx) => (
-                      <span key={idx} className="perm-tag">✓ {p}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn-submit-login"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <span>جاري تسجيل الدخول...</span>
-                  ) : (
-                    <span>دخول إلى لوحة التحكم ← ({selectedRole.titleAr})</span>
-                  )}
-                </button>
-              </form>
-
-              <div className="login-footer-info">
-                <span>🔐 اتصال مشفر وآمن عبر قاعدة بيانات Cloudflare D1 و PostgreSQL</span>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <style jsx>{`
-        .login-page-v2 {
-          min-height: 100vh;
-          background: #090d16;
-          color: #f1f5f9;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 32px 16px;
-          overflow: hidden;
-          font-family: inherit;
-        }
-
-        .login-orb {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(120px);
-          pointer-events: none;
-          z-index: 0;
-        }
-        .orb-primary {
-          width: 500px;
-          height: 500px;
-          background: rgba(14, 165, 233, 0.15);
-          top: -100px;
-          right: -100px;
-        }
-        .orb-accent {
-          width: 450px;
-          height: 450px;
-          background: rgba(234, 179, 8, 0.12);
-          bottom: -100px;
-          left: -100px;
-        }
-
-        .login-container {
-          position: relative;
-          z-index: 1;
-          width: 100%;
-          max-width: 1240px;
-        }
-
-        .login-header-box {
-          text-align: center;
-          margin-bottom: 28px;
-        }
-
-        .login-brand-badge {
-          display: inline-block;
-          font-size: 13px;
-          font-weight: 700;
-          color: #38bdf8;
-          background: rgba(14, 165, 233, 0.12);
-          border: 1px solid rgba(14, 165, 233, 0.25);
-          padding: 6px 18px;
-          border-radius: 20px;
-          margin-bottom: 12px;
-          letter-spacing: 0.5px;
-        }
-
-        .login-main-title {
-          font-size: 32px;
-          font-weight: 900;
-          color: #ffffff;
-          margin: 0 0 8px 0;
-          letter-spacing: -0.5px;
-        }
-
-        .login-subtitle {
-          font-size: 14.5px;
-          color: #94a3b8;
-          max-width: 720px;
-          margin: 0 auto;
-          line-height: 1.6;
-        }
-
-        .login-split-grid {
-          display: grid;
-          grid-template-columns: 1.25fr 1fr;
-          gap: 24px;
-          align-items: start;
-        }
-
-        @media (max-width: 980px) {
-          .login-split-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        /* Manager Highlight Card */
-        .manager-highlight-card {
-          background: linear-gradient(135deg, rgba(30, 27, 75, 0.8), rgba(24, 24, 27, 0.9));
-          border: 2px solid #eab308;
-          border-radius: 16px;
-          padding: 22px;
-          box-shadow: 0 10px 30px -10px rgba(234, 179, 8, 0.25);
-          margin-bottom: 20px;
-        }
-
-        .manager-card-top {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          margin-bottom: 12px;
-        }
-
-        .manager-crown-icon {
-          font-size: 32px;
-          background: rgba(234, 179, 8, 0.2);
-          width: 52px;
-          height: 52px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid rgba(234, 179, 8, 0.4);
-        }
-
-        .manager-title-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .manager-title {
-          font-size: 18px;
-          font-weight: 800;
-          color: #fef08a;
-        }
-
-        .tag-full-access {
-          font-size: 11px;
-          font-weight: 800;
-          background: #eab308;
-          color: #000;
-          padding: 2px 8px;
-          border-radius: 6px;
-        }
-
-        .manager-subtitle-en {
-          font-size: 12px;
-          color: #cbd5e1;
-          direction: ltr;
-          text-align: right;
-        }
-
-        .manager-access-note {
-          font-size: 13px;
-          color: #e2e8f0;
-          line-height: 1.6;
-          margin: 0 0 16px 0;
-          background: rgba(0, 0, 0, 0.25);
-          padding: 10px 14px;
-          border-radius: 8px;
-          border-right: 3px solid #eab308;
-        }
-
-        .credentials-chip-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 16px;
-        }
-
-        @media (max-width: 600px) {
-          .credentials-chip-row {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        .cred-chip {
-          background: rgba(15, 23, 42, 0.8);
-          border: 1px solid rgba(234, 179, 8, 0.3);
-          padding: 8px 12px;
-          border-radius: 8px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 12px;
-          transition: all 0.2s;
-        }
-        .cred-chip:hover {
-          background: rgba(234, 179, 8, 0.15);
-          border-color: #eab308;
-        }
-
-        .cred-label {
-          color: #94a3b8;
-          font-weight: 600;
-        }
-
-        .cred-val {
-          font-family: monospace;
-          color: #fef08a;
-          font-weight: 700;
-          direction: ltr;
-        }
-
-        .copy-icon {
-          font-size: 12px;
-          color: #38bdf8;
-        }
-
-        .btn-manager-direct {
-          width: 100%;
-          background: linear-gradient(135deg, #eab308, #ca8a04);
-          color: #090d16;
-          border: none;
-          padding: 13px 18px;
-          border-radius: 10px;
-          font-weight: 900;
-          font-size: 14.5px;
-          cursor: pointer;
-          transition: transform 0.15s, box-shadow 0.2s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-        .btn-manager-direct:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(234, 179, 8, 0.4);
-        }
-
-        /* Roles Selector Grid */
-        .roles-selector-section {
-          background: rgba(15, 23, 42, 0.65);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
-          padding: 20px;
-          backdrop-filter: blur(16px);
-        }
-
-        .roles-section-title {
-          font-size: 14px;
-          font-weight: 700;
-          color: #cbd5e1;
-          margin-bottom: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .roles-count {
-          font-size: 12px;
-          color: #64748b;
-        }
-
-        .roles-selector-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-        }
-
-        @media (max-width: 600px) {
-          .roles-selector-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        .role-select-card {
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          border-radius: 10px;
-          padding: 12px;
-          text-align: right;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          color: inherit;
-        }
-        .role-select-card:hover {
-          background: rgba(30, 41, 59, 0.9);
-          border-color: rgba(56, 189, 248, 0.4);
-        }
-        .role-select-card.active {
-          background: rgba(14, 165, 233, 0.12);
-          border: 1.5px solid #38bdf8;
-          box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
-        }
-
-        .role-card-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .role-card-title {
-          font-size: 13px;
-          font-weight: 800;
-          color: #ffffff;
-        }
-
-        .role-badge-pill {
-          font-size: 10px;
-          font-weight: 700;
-          padding: 2px 6px;
-          border-radius: 4px;
-        }
-        .badge-manager { background: rgba(234, 179, 8, 0.2); color: #fef08a; }
-        .badge-sales { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-        .badge-prod { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
-        .badge-tech { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
-        .badge-wh { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
-        .badge-qc { background: rgba(236, 72, 153, 0.2); color: #f472b6; }
-
-        .role-card-email {
-          font-size: 11px;
-          font-family: monospace;
-          color: #94a3b8;
-          direction: ltr;
-          text-align: right;
-        }
-
-        .role-card-desc {
-          font-size: 11.5px;
-          color: #64748b;
-          line-height: 1.4;
-          margin-top: 2px;
-        }
-
-        /* Right Column Form Card */
-        .login-card-inner {
-          background: rgba(15, 23, 42, 0.85);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 18px;
-          padding: 28px;
-          backdrop-filter: blur(20px);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-        }
-
-        .login-card-header {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          margin-bottom: 22px;
-          padding-bottom: 18px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .login-avatar-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          background: rgba(14, 165, 233, 0.15);
-          border: 1px solid rgba(14, 165, 233, 0.3);
-          font-size: 24px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .login-card-title {
-          font-size: 20px;
-          font-weight: 800;
-          color: #ffffff;
-          margin: 0 0 4px 0;
-        }
-
-        .login-card-sub {
-          font-size: 13px;
-          color: #94a3b8;
-          margin: 0;
-        }
-
-        .login-alert-error {
-          background: rgba(239, 68, 68, 0.15);
-          border: 1px solid rgba(239, 68, 68, 0.4);
-          color: #fca5a5;
-          padding: 12px 16px;
-          border-radius: 10px;
-          font-size: 13px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 20px;
-        }
-
-        .login-form-body {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .form-group-v2 {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .form-label-v2 {
-          font-size: 13px;
-          font-weight: 700;
-          color: #e2e8f0;
-        }
-
-        .label-flex-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .pwd-hint {
-          font-size: 11px;
-          color: #94a3b8;
-          font-family: monospace;
-          direction: ltr;
-        }
-
-        .input-wrap {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .form-input-v2 {
-          width: 100%;
-          background: rgba(30, 41, 59, 0.8);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 10px;
-          padding: 12px 14px 12px 42px;
-          color: #ffffff;
-          font-size: 14px;
-          outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s;
-          direction: ltr;
-          text-align: left;
-        }
-        .form-input-v2:focus {
-          border-color: #38bdf8;
-          box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
-        }
-
-        .input-icon {
-          position: absolute;
-          left: 14px;
-          font-size: 14px;
-          color: #64748b;
-          pointer-events: none;
-        }
-
-        .btn-toggle-eye {
-          position: absolute;
-          left: 12px;
-          background: none;
-          border: none;
-          font-size: 14px;
-          color: #94a3b8;
-          cursor: pointer;
-        }
-
-        .role-perms-box {
-          background: rgba(30, 41, 59, 0.4);
-          border: 1px dashed rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-          padding: 12px;
-        }
-
-        .perms-title {
-          font-size: 11.5px;
-          font-weight: 700;
-          color: #94a3b8;
-          margin-bottom: 8px;
-        }
-
-        .perms-tag-cloud {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-
-        .perm-tag {
-          font-size: 11px;
-          background: rgba(14, 165, 233, 0.12);
-          color: #7dd3fc;
-          padding: 3px 8px;
-          border-radius: 6px;
-          border: 1px solid rgba(14, 165, 233, 0.2);
-        }
-
-        .btn-submit-login {
-          background: linear-gradient(135deg, #0284c7, #0369a1);
-          color: #ffffff;
-          border: none;
-          padding: 14px;
-          border-radius: 10px;
-          font-size: 15px;
-          font-weight: 800;
-          cursor: pointer;
-          transition: transform 0.15s, box-shadow 0.2s;
-          margin-top: 6px;
-        }
-        .btn-submit-login:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4);
-        }
-
-        .login-footer-info {
-          text-align: center;
-          margin-top: 18px;
-          padding-top: 14px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          font-size: 11.5px;
-          color: #64748b;
-        }
-
-        /* Light theme overrides for login page */
-        :global([data-theme="light"]) .login-page-v2 {
-          background: #f4f6fa;
-          color: #0f172a;
-        }
-        :global([data-theme="light"]) .orb-primary {
-          background: rgba(2, 132, 199, 0.08);
-        }
-        :global([data-theme="light"]) .orb-accent {
-          background: rgba(245, 158, 11, 0.08);
-        }
-        :global([data-theme="light"]) .login-brand-badge {
-          color: #0284c7;
-          background: rgba(2, 132, 199, 0.08);
-          border-color: rgba(2, 132, 199, 0.2);
-        }
-        :global([data-theme="light"]) .login-main-title {
-          color: #0f172a;
-        }
-        :global([data-theme="light"]) .login-subtitle {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .manager-highlight-card {
-          background: linear-gradient(135deg, #fffbeb, #fef3c7);
-          border-color: #f59e0b;
-          box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.15);
-        }
-        :global([data-theme="light"]) .manager-crown-icon {
-          background: #fef3c7;
-          border-color: #fde68a;
-        }
-        :global([data-theme="light"]) .manager-title {
-          color: #92400e;
-        }
-        :global([data-theme="light"]) .manager-subtitle-en {
-          color: #78350f;
-        }
-        :global([data-theme="light"]) .manager-access-note {
-          color: #451a03;
-          background: rgba(254, 243, 199, 0.6);
-          border-right-color: #f59e0b;
-        }
-        :global([data-theme="light"]) .cred-chip {
-          background: #ffffff;
-          border-color: #fde68a;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        :global([data-theme="light"]) .cred-chip:hover {
-          background: #fefce8;
-          border-color: #f59e0b;
-        }
-        :global([data-theme="light"]) .cred-label {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .cred-val {
-          color: #b45309;
-        }
-        :global([data-theme="light"]) .copy-icon {
-          color: #0284c7;
-        }
-        :global([data-theme="light"]) .roles-selector-section {
-          background: #ffffff;
-          border-color: #e2e8f0;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-        }
-        :global([data-theme="light"]) .roles-section-title {
-          color: #1e293b;
-        }
-        :global([data-theme="light"]) .roles-count {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .role-select-card {
-          background: #f8fafc;
-          border-color: #e2e8f0;
-        }
-        :global([data-theme="light"]) .role-select-card:hover {
-          background: #f1f5f9;
-          border-color: #cbd5e1;
-        }
-        :global([data-theme="light"]) .role-select-card.active {
-          background: #f0f9ff;
-          border-color: #0284c7;
-          box-shadow: 0 0 15px rgba(2, 132, 199, 0.12);
-        }
-        :global([data-theme="light"]) .role-card-title {
-          color: #0f172a;
-        }
-        :global([data-theme="light"]) .role-card-email {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .role-card-desc {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .login-card-inner {
-          background: #ffffff;
-          border-color: #e2e8f0;
-          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
-        }
-        :global([data-theme="light"]) .login-card-header {
-          border-bottom-color: #f1f5f9;
-        }
-        :global([data-theme="light"]) .login-avatar-icon {
-          background: rgba(2, 132, 199, 0.08);
-          border-color: rgba(2, 132, 199, 0.2);
-        }
-        :global([data-theme="light"]) .login-card-title {
-          color: #0f172a;
-        }
-        :global([data-theme="light"]) .login-card-sub {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .form-label-v2 {
-          color: #334155;
-        }
-        :global([data-theme="light"]) .pwd-hint {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .form-input-v2 {
-          background: #f8fafc;
-          border-color: #cbd5e1;
-          color: #0f172a;
-        }
-        :global([data-theme="light"]) .form-input-v2:focus {
-          background: #ffffff;
-          border-color: #0284c7;
-          box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
-        }
-        :global([data-theme="light"]) .btn-toggle-eye {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .role-perms-box {
-          background: #f8fafc;
-          border-color: #e2e8f0;
-        }
-        :global([data-theme="light"]) .perms-title {
-          color: #64748b;
-        }
-        :global([data-theme="light"]) .perm-tag {
-          background: rgba(2, 132, 199, 0.08);
-          color: #0284c7;
-          border-color: rgba(2, 132, 199, 0.2);
-        }
-        :global([data-theme="light"]) .login-footer-info {
-          border-top-color: #f1f5f9;
-          color: #64748b;
-        }
-        /* Role badges in light mode */
-        :global([data-theme="light"]) .badge-manager { background: #fef3c7; color: #92400e; }
-        :global([data-theme="light"]) .badge-sales { background: #d1fae5; color: #065f46; }
-        :global([data-theme="light"]) .badge-prod { background: #f3e8ff; color: #6b21a8; }
-        :global([data-theme="light"]) .badge-tech { background: #e0f2fe; color: #0369a1; }
-        :global([data-theme="light"]) .badge-wh { background: #ffedd5; color: #9a3412; }
-        :global([data-theme="light"]) .badge-qc { background: #fce7f3; color: #9d174d; }
-      `}</style>
+      {/* Official Factory Footer Details */}
+      <footer style={{
+        marginTop: 20,
+        textAlign: 'center',
+        fontSize: 11.5,
+        color: 'var(--text-muted)',
+        lineHeight: 1.8,
+        maxWidth: 580,
+        zIndex: 10
+      }}>
+        <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>
+          {isRtl ? 'المصنع: عمان - الأردن | هاتف: 4123035 6 962 | فاكس: 4123034 6 962' : 'Factory: Amman - Jordan | Tel: +962 6 4123035 | Fax: +962 6 4123034'}
+        </div>
+        <div>
+          <span>🌐 <a href="https://www.almasarjo.com" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>www.almasarjo.com</a></span>
+          <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
+          <span>✉️ <a href="mailto:info@almasarjo.com" style={{ color: 'var(--accent)', textDecoration: 'none' }}>info@almasarjo.com</a></span>
+          <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
+          <span>© 2026 Al-Masar Switchgear Co. All Rights Reserved</span>
+        </div>
+      </footer>
     </div>
   )
 }

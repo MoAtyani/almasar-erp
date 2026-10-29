@@ -675,6 +675,77 @@ export default {
         });
       }
 
+      // 7.8 Profile API (Get, Update details, Password Reset)
+      if (pathname === '/api/profile') {
+        if (method === 'GET') {
+          const id = url.searchParams.get('id');
+          let prof: any = null;
+          if (id) {
+            prof = await env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(id).first();
+          } else {
+            prof = await env.DB.prepare('SELECT * FROM profiles WHERE email = "manager@almasar-switchgear.com" OR role = "system_admin" LIMIT 1').first();
+          }
+          if (!prof) return Response.json({ success: false, error: 'Profile not found' }, { headers: corsHeaders, status: 404 });
+          delete prof.password_hash;
+          return Response.json({ success: true, profile: prof, user: prof }, { headers: corsHeaders });
+        }
+        if (method === 'PUT') {
+          const body: any = await request.json();
+          let targetId = body.id;
+          if (!targetId && body.email) {
+            const found: any = await env.DB.prepare('SELECT id FROM profiles WHERE LOWER(email) = ?').bind(body.email.toLowerCase()).first();
+            if (found) targetId = found.id;
+          }
+          if (!targetId) return Response.json({ success: false, error: 'User ID or Email required' }, { headers: corsHeaders, status: 400 });
+
+          await env.DB.prepare(`
+            UPDATE profiles
+            SET full_name = COALESCE(?, full_name),
+                full_name_ar = COALESCE(?, full_name_ar),
+                phone = COALESCE(?, phone),
+                department = COALESCE(?, department),
+                avatar_url = COALESCE(?, avatar_url),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(
+            body.full_name || null,
+            body.full_name_ar || null,
+            body.phone !== undefined ? body.phone : null,
+            body.department || null,
+            body.avatar_url !== undefined ? body.avatar_url : null,
+            targetId
+          ).run();
+
+          const updated: any = await env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(targetId).first();
+          delete updated.password_hash;
+          const isManager = ['system_admin', 'company_owner', 'general_manager', 'admin'].includes(updated.role);
+          const payload = { ...updated, is_manager: isManager };
+
+          return Response.json({ success: true, message: 'Profile updated successfully', user: payload, profile: payload }, {
+            headers: {
+              ...corsHeaders,
+              'Set-Cookie': `almasar_auth_user=${encodeURIComponent(JSON.stringify(payload))}; Path=/; SameSite=Lax; Max-Age=2592000`
+            }
+          });
+        }
+        if (method === 'POST') {
+          const body: any = await request.json();
+          const { id, email, new_password } = body;
+          if (!new_password || new_password.length < 6) {
+            return Response.json({ success: false, error: 'New password must be at least 6 characters' }, { headers: corsHeaders, status: 400 });
+          }
+          let targetId = id;
+          if (!targetId && email) {
+            const found: any = await env.DB.prepare('SELECT id FROM profiles WHERE LOWER(email) = ?').bind(email.toLowerCase()).first();
+            if (found) targetId = found.id;
+          }
+          if (!targetId) return Response.json({ success: false, error: 'User not found' }, { headers: corsHeaders, status: 404 });
+
+          await env.DB.prepare('UPDATE profiles SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(new_password, targetId).run();
+          return Response.json({ success: true, message: 'Password updated successfully' }, { headers: corsHeaders });
+        }
+      }
+
       // 8. Users & Roles Management (Manager Add, Edit, Delete, Permissions)
       if (pathname === '/api/users' || pathname === '/api/hr') {
         if (method === 'GET') {
