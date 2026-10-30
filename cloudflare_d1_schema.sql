@@ -618,3 +618,71 @@ CREATE TABLE time_logs (
   original_end_time TEXT,
   created_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS biometric_devices (
+  id TEXT PRIMARY KEY,
+  device_name TEXT,
+  device_model TEXT,
+  ip_address TEXT,
+  port INTEGER,
+  location TEXT,
+  status TEXT,
+  last_sync TEXT,
+  auto_sync INTEGER,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS attendance_punches (
+  id TEXT PRIMARY KEY,
+  device_id TEXT,
+  employee_id TEXT,
+  biometric_pin TEXT,
+  punch_time TEXT,
+  punch_type TEXT,
+  source TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS advance_installments (
+  id TEXT PRIMARY KEY,
+  advance_id TEXT,
+  installment_number INTEGER,
+  deduction_month TEXT,
+  due_date TEXT,
+  amount REAL,
+  status TEXT,
+  paid_at TEXT,
+  payslip_ref TEXT,
+  notes TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS disciplinary_records (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT,
+  action_type TEXT,
+  action_date TEXT,
+  reason TEXT,
+  deduction_days REAL,
+  deduction_amount REAL,
+  deduction_month TEXT,
+  status TEXT,
+  decision_maker TEXT,
+  notes TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS resignation_records (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT,
+  submission_date TEXT,
+  last_working_day TEXT,
+  reason TEXT,
+  notice_period_days INTEGER,
+  status TEXT,
+  clearance_status TEXT,
+  end_of_service_benefits REAL,
+  settlement_notes TEXT,
+  reviewed_by TEXT,
+  created_at TEXT
+);

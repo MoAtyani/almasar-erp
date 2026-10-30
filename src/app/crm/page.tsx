@@ -238,6 +238,7 @@ export default function CRMPage() {
   function applyTemplate(tpl: ProjectTemplate) {
     setForm({
       name: isRtl ? `${tpl.template_name_ar || tpl.template_name} - مشروع جديد` : `${tpl.template_name} - New Project`,
+      reference: '',
       customer_name: '',
       company: '',
       customer_email: '',

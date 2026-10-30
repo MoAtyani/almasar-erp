@@ -279,18 +279,148 @@ export interface Invoice {
 // ── HR & Payroll Types ──
 export interface Employee {
   id: string
+  profile_id?: string
   full_name: string
   full_name_ar: string
   employee_id: string
+  employee_code?: string
   department: string
+  job_title?: string
   role: UserRole
   email: string
   phone: string
   hire_date: string
+  effective_date?: string
+  national_id?: string
   basic_salary: number
-  reward_points: number
+  housing_allowance?: number
+  transport_allowance?: number
+  other_allowances?: number
+  social_security_number?: string
+  social_security_rate_employee?: number
+  social_security_rate_company?: number
+  is_social_security_active?: boolean
+  education_level?: string
+  bank_name?: string
+  bank_iban?: string
   bank_account?: string
+  biometric_pin?: string
+  reward_points: number
   status: 'active' | 'on_leave' | 'terminated'
+  employment_status?: string
+}
+
+export interface BiometricDevice {
+  id: string
+  device_name: string
+  device_model: string
+  ip_address: string
+  port: number
+  location: string
+  status: 'online' | 'offline' | 'syncing'
+  last_sync: string
+  auto_sync: boolean
+  created_at: string
+}
+
+export interface AttendancePunch {
+  id: string
+  device_id?: string
+  employee_id: string
+  biometric_pin?: string
+  punch_time: string
+  punch_type: 'check_in' | 'check_out'
+  source: string
+  employee_name?: string
+}
+
+export interface AttendanceLog {
+  id: string
+  employee_id: string
+  employee_name?: string
+  employee_name_ar?: string
+  employee_code?: string
+  department?: string
+  log_date: string
+  check_in?: string
+  check_out?: string
+  shift_hours: number
+  actual_hours: number
+  status: 'present' | 'absent' | 'late' | 'excused'
+  overtime_hours: number
+  overtime_rate: number
+  overtime_amount: number
+  late_minutes: number
+  lateness_deduction: number
+  daily_deduction: number
+  device_id?: string
+  notes?: string
+}
+
+export interface AdvanceInstallment {
+  id: string
+  advance_id: string
+  installment_number: number
+  deduction_month: string
+  due_date: string
+  amount: number
+  status: 'pending' | 'deducted' | 'paid_manually'
+  paid_at?: string
+  payslip_ref?: string
+  notes?: string
+}
+
+export interface EmployeeAdvance {
+  id: string
+  employee_id: string
+  employee_name?: string
+  employee_name_ar?: string
+  request_date: string
+  amount: number
+  repayment_months: number
+  monthly_installment: number
+  repaid_amount: number
+  balance: number
+  deduction_start_month: string
+  status: 'pending' | 'approved' | 'active' | 'repaid' | 'cancelled'
+  purpose?: string
+  notes?: string
+  installments?: AdvanceInstallment[]
+}
+
+export interface DisciplinaryRecord {
+  id: string
+  employee_id: string
+  employee_name?: string
+  employee_name_ar?: string
+  department?: string
+  action_type: 'verbal_warning' | 'first_warning' | 'second_warning' | 'day_deduction' | 'multi_day_deduction' | 'termination'
+  action_date: string
+  reason: string
+  deduction_days: number
+  deduction_amount: number
+  deduction_month?: string
+  status: 'draft' | 'issued' | 'acknowledged' | 'appeal' | 'cancelled'
+  decision_maker: string
+  notes?: string
+}
+
+export interface ResignationRecord {
+  id: string
+  employee_id: string
+  employee_name?: string
+  employee_name_ar?: string
+  department?: string
+  job_title?: string
+  submission_date: string
+  last_working_day: string
+  reason: string
+  notice_period_days: number
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'completed'
+  clearance_status: 'pending' | 'in_progress' | 'cleared'
+  end_of_service_benefits: number
+  settlement_notes?: string
+  reviewed_by: string
 }
 
 export interface Payslip {
@@ -298,14 +428,38 @@ export interface Payslip {
   reference: string
   employee_id: string
   employee_name: string
+  employee_name_ar?: string
+  employee_code?: string
+  national_id?: string
+  department?: string
+  job_title?: string
   month: string
   basic_salary: number
-  points_bonus: number
+  housing_allowance?: number
+  transport_allowance?: number
   allowances: number
+  points_bonus: number
+  overtime_hours?: number
+  overtime_rate?: number
+  overtime_amount?: number
+  late_minutes?: number
+  lateness_deduction?: number
+  absence_days?: number
+  absence_deduction?: number
+  daily_rate?: number
+  hourly_rate?: number
+  social_security_employee?: number
+  social_security_company?: number
+  advance_deduction?: number
+  penalty_deduction?: number
+  other_deductions?: number
+  gross_salary?: number
+  total_deductions?: number
   deductions: number
   net_salary: number
   status: 'draft' | 'approved' | 'paid'
   payment_date?: string
+  notes?: string
 }
 
 // ── DMS (Document Management) Types ──

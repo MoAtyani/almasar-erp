@@ -649,3 +649,79 @@ CREATE TABLE IF NOT EXISTS recruitment_candidates (
   decision TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── 19. ADVANCED HR & PAYROLL MODULES ──
+
+-- Biometric Attendance Devices
+CREATE TABLE IF NOT EXISTS biometric_devices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  device_name TEXT NOT NULL,
+  device_model TEXT DEFAULT 'ZKTeco uFace 800 Plus',
+  ip_address TEXT NOT NULL,
+  port INTEGER DEFAULT 4370,
+  location TEXT DEFAULT 'Main Factory Entrance Gate 1',
+  status TEXT DEFAULT 'online',
+  last_sync TIMESTAMPTZ DEFAULT NOW(),
+  auto_sync BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Raw Biometric Punch Logs
+CREATE TABLE IF NOT EXISTS attendance_punches (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  device_id UUID REFERENCES biometric_devices(id) ON DELETE SET NULL,
+  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+  biometric_pin TEXT,
+  punch_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  punch_type TEXT DEFAULT 'check_in', -- check_in, check_out
+  source TEXT DEFAULT 'biometric_device',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Advance Installment Schedules
+CREATE TABLE IF NOT EXISTS advance_installments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  advance_id UUID NOT NULL REFERENCES employee_advances(id) ON DELETE CASCADE,
+  installment_number INTEGER NOT NULL,
+  deduction_month TEXT NOT NULL,
+  due_date DATE NOT NULL,
+  amount NUMERIC(12,2) NOT NULL,
+  status TEXT DEFAULT 'pending', -- pending, deducted, paid_manually
+  paid_at TIMESTAMPTZ,
+  payslip_ref TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Disciplinary Actions and Penalties
+CREATE TABLE IF NOT EXISTS disciplinary_records (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL, -- verbal_warning, first_warning, second_warning, day_deduction, multi_day_deduction, termination
+  action_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  reason TEXT NOT NULL,
+  deduction_days NUMERIC(4,1) DEFAULT 0,
+  deduction_amount NUMERIC(12,2) DEFAULT 0,
+  deduction_month TEXT,
+  status TEXT DEFAULT 'issued', -- draft, issued, acknowledged, appeal, cancelled
+  decision_maker TEXT DEFAULT 'General Manager',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Resignations & End of Service
+CREATE TABLE IF NOT EXISTS resignation_records (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  submission_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  last_working_day DATE NOT NULL,
+  reason TEXT NOT NULL,
+  notice_period_days INTEGER DEFAULT 30,
+  status TEXT DEFAULT 'pending', -- pending, approved, rejected, withdrawn, completed
+  clearance_status TEXT DEFAULT 'in_progress',
+  end_of_service_benefits NUMERIC(12,2) DEFAULT 0,
+  settlement_notes TEXT,
+  reviewed_by TEXT DEFAULT 'HR & General Management',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
