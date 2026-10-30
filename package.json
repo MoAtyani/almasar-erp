@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node build-export.js",
     "export": "node build-export.js",
     "deploy": "npm run export && npx wrangler deploy",
     "start": "next start",
