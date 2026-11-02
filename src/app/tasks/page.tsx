@@ -4,7 +4,42 @@ import AppLayout from '@/components/AppLayout'
 import { useLanguage } from '@/context/LanguageContext'
 import { formatDate } from '@/lib/constants'
 
-type MainTab = 'orders' | 'iron' | 'hangar' | 'electrical'
+type MainTab = 'design_incoming' | 'orders' | 'iron' | 'hangar' | 'electrical'
+
+const INITIAL_DESIGN_INCOMING = [
+  {
+    id: 'MO-DES-2026-001',
+    project_ref: 'REF-2026-0042',
+    project_name: 'مشروع لوحات توزيع رئيسية 2500A MDB',
+    customer_name: 'شركة المباني المتقدمة للمقاولات',
+    company: 'شركة المباني المتقدمة',
+    department: 'قسم الكهرباء والتجميع',
+    quantity: 1,
+    schematics: 'SLD_Single_Line_Diagram_MDB_Rev2.pdf',
+    instructions: 'البدء بأعمال التقطيع والتجميع حسب المخططات المعتمدة وتجهيز فحص FAT',
+    received_date: '2026-10-24',
+    deadline: '2026-11-15',
+    created_at: '2026-10-24',
+    origin: 'from_design',
+    dispatched_to: null as string | null
+  },
+  {
+    id: 'MO-DES-2026-002',
+    project_ref: 'REF-2026-0048',
+    project_name: 'هياكل حديد وأبواب خارجية معالجة ضد الرطوبة IP65',
+    customer_name: 'المهندس خالد الرشيد',
+    company: 'مشاريع الشرق للأعمال الكهروميكانيكية',
+    department: 'قسم الحديد',
+    quantity: 12,
+    schematics: 'Outdoor_Enclosure_IP65_Specs.pdf',
+    instructions: 'قص الليزر وثني الصاج مع تطبيق الدهان الحراري RAL 7035',
+    received_date: '2026-10-28',
+    deadline: '2026-11-20',
+    created_at: '2026-10-28',
+    origin: 'from_design',
+    dispatched_to: null as string | null
+  }
+]
 
 const HANGAR_FIXED_MEASUREMENTS = [
   '( 70X50X25 )',
@@ -19,8 +54,11 @@ const HANGAR_FIXED_MEASUREMENTS = [
 
 export default function TasksPage() {
   const { lang, isRtl } = useLanguage()
-  const [activeTab, setActiveTab] = useState<MainTab>('orders')
+  const [activeTab, setActiveTab] = useState<MainTab>('design_incoming')
   const [productionOrders, setProductionOrders] = useState<any[]>([])
+  const [designIncomingOrders, setDesignIncomingOrders] = useState<any[]>([])
+  const [selectedDesignOrder, setSelectedDesignOrder] = useState<any | null>(null)
+  const [dispatchDepartment, setDispatchDepartment] = useState('قسم الحديد')
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -65,6 +103,7 @@ export default function TasksPage() {
   useEffect(() => {
     loadAuxData()
     loadProductionOrders()
+    loadDesignIncomingOrders()
   }, [])
 
   async function loadAuxData() {
@@ -95,6 +134,84 @@ export default function TasksPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function loadDesignIncomingOrders() {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('almasar_production_from_design')
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDesignIncomingOrders([...parsed, ...INITIAL_DESIGN_INCOMING.filter(i => !parsed.some((p: any) => p.id === i.id))])
+            return
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      }
+      setDesignIncomingOrders(INITIAL_DESIGN_INCOMING)
+    }
+  }
+
+  async function handleDispatchDesignOrderToDepartment(order: any, dept: string) {
+    try {
+      const deptCode = dept === 'قسم الحديد' ? 'iron' : dept === 'قسم الهنجر' ? 'hangar' : dept === 'قسم الدهان' ? 'painting' : dept === 'قسم الفحص والجودة' ? 'qc' : 'electrical'
+      
+      await fetch('/api/production/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: order.project_id || projects[0]?.id,
+          department: deptCode === 'qc' ? 'electrical' : deptCode,
+          item_description: `[أمر من التصميم] ${order.project_name || order.item_description}`,
+          details_notes: `المخططات: ${order.schematics || ''} | التعليمات: ${order.instructions || ''}`,
+          notes: order.instructions || '',
+          planned_start: order.received_date,
+          deadline: order.deadline,
+          quantity: order.quantity || 1,
+          requires_painting: dept === 'قسم الدهان' || dept === 'قسم الهنجر',
+          receipt_status: 'started'
+        })
+      })
+
+      if (dept === 'قسم الفحص والجودة') {
+        await fetch('/api/qc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_id: order.project_id || projects[0]?.id,
+            department: 'qc',
+            notes: `[وارد من التصميم] ${order.project_name || order.item_description}`
+          })
+        }).catch(() => {})
+      }
+
+      const updated = designIncomingOrders.map(o => o.id === order.id ? { ...o, dispatched_to: dept } : o)
+      setDesignIncomingOrders(updated)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('almasar_production_from_design', JSON.stringify(updated))
+      }
+
+      setSelectedDesignOrder(null)
+      loadProductionOrders()
+      alert(isRtl ? `تم إرسال أمر التصنيع بنجاح إلى (${dept}) مع كافة المخططات وملفات العميل!` : `Order successfully dispatched to ${dept}!`)
+    } catch (err) {
+      console.error('Error dispatching design order:', err)
+    }
+  }
+
+  function handleDownloadFile(fileName: string) {
+    const dummyContent = `ملف ومخططات مشروع المسار: ${fileName}\nتاريخ التصدير: ${new Date().toLocaleString('ar')}\nشركة المسار لصناعة اللوحات الكهربائية`
+    const blob = new Blob([dummyContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   // --- Department Specific Creation Handlers ---
@@ -281,28 +398,25 @@ export default function TasksPage() {
       title="Tasks & Production"
       titleAr="المهام والإنتاج"
       actions={
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {/* Note: In 'orders' tab, new order button is removed as requested */}
-          {activeTab === 'iron' && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowIronModal(true)}>
-              {isRtl ? '+ أمر تصنيع جديد' : '+ New Production Order'}
-            </button>
-          )}
-          {activeTab === 'hangar' && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowHangarModal(true)}>
-              {isRtl ? '+ أمر تصنيع جديد' : '+ New Production Order'}
-            </button>
-          )}
-          {activeTab === 'electrical' && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowElectricalModal(true)}>
-              {isRtl ? '+ أمر تصنيع جديد' : '+ New Production Order'}
-            </button>
-          )}
-        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowHangarModal(true)}>
+          🏭 {isRtl ? 'امر تصنيع للهنجر' : 'Hangar Manufacturing Order'}
+        </button>
       }
     >
       {/* Tab Switcher */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', background: 'var(--bg-card)', padding: 6, borderRadius: 10, border: '1px solid var(--border)' }}>
+        <button
+          className={`btn btn-sm ${activeTab === 'design_incoming' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{
+            borderColor: activeTab === 'design_incoming' ? '#10b981' : 'transparent',
+            background: activeTab === 'design_incoming' ? 'linear-gradient(135deg, #059669, #10b981)' : undefined,
+            color: activeTab === 'design_incoming' ? '#ffffff' : undefined,
+            fontWeight: 700
+          }}
+          onClick={() => setActiveTab('design_incoming')}
+        >
+          📐 {isRtl ? 'امر تصنيع جديد جاي من التصميم' : 'Orders from Design'} ({designIncomingOrders.length})
+        </button>
         <button
           className={`btn btn-sm ${activeTab === 'orders' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('orders')}
@@ -331,6 +445,110 @@ export default function TasksPage() {
           ⚡ {isRtl ? 'قسم الكهرباء والتجميع' : 'Electrical & Assembly'} ({electricalOrders.length})
         </button>
       </div>
+
+      {/* ========================================================================= */}
+      {/* TAB: امر تصنيع جديد جاي من التصميم (Incoming from Design) */}
+      {/* ========================================================================= */}
+      {activeTab === 'design_incoming' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="card" style={{ padding: 20, background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(6, 182, 212, 0.08))', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>
+                  📐 {isRtl ? 'أمر تصنيع جديد جاي من التصميم' : 'New Manufacturing Orders from Design Department'}
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {isRtl
+                    ? 'في هذا القسم تستعرض كافة تفاصيل المشروع المحولة من قسم التصميم مع ملفات العميل ومخططاته الهندسية وإمكانية تحميلها، وإصدار أمر التصنيع للقسم المطلوب (قسم الحديد، قسم الكهرباء والتجميع، قسم الدهان، قسم الفحص والجودة).'
+                    : 'View project details transferred from Design with client files and blueprints, and dispatch manufacturing orders to selected departments.'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="badge badge-accent" style={{ fontSize: 13, padding: '6px 12px' }}>
+                  {isRtl ? 'إجمالي الأوامر الواردة:' : 'Total Incoming:'} {designIncomingOrders.length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="table-container card" style={{ padding: 16 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{isRtl ? 'رقم الأمر / المشروع' : 'Order / Project'}</th>
+                  <th>{isRtl ? 'العميل والشركة' : 'Customer & Company'}</th>
+                  <th>{isRtl ? 'الكمية' : 'Qty'}</th>
+                  <th>{isRtl ? 'ملفات ومخططات العميل' : 'Client Files & Blueprints'}</th>
+                  <th>{isRtl ? 'تاريخ الاستلام' : 'Receipt Date'}</th>
+                  <th>{isRtl ? 'موعد التسليم' : 'Delivery Date'}</th>
+                  <th>{isRtl ? 'حالة التوجيه' : 'Dispatch Status'}</th>
+                  <th style={{ textAlign: isRtl ? 'left' : 'right' }}>{isRtl ? 'الإجراء' : 'Action'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {designIncomingOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+                      {isRtl ? 'لا توجد أوامر جديدة واردة من قسم التصميم حالياً.' : 'No incoming orders from design.'}
+                    </td>
+                  </tr>
+                ) : (
+                  designIncomingOrders.map((order: any) => (
+                    <tr key={order.id}>
+                      <td>
+                        <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{order.project_name || order.item_description}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{order.id} | {order.project_ref}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{order.customer_name || '—'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{order.company || '—'}</div>
+                      </td>
+                      <td>
+                        <span className="badge badge-secondary">{order.quantity || 1}</span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          onClick={() => handleDownloadFile(order.schematics || 'Client_Drawings_Specs.pdf')}
+                          title={isRtl ? 'تحميل ملف العميل ومخططاته' : 'Download Client Files'}
+                        >
+                          📥 {order.schematics || (isRtl ? 'ملف العميل والمخطط' : 'Client File')}
+                        </button>
+                      </td>
+                      <td>{order.received_date ? formatDate(order.received_date) : '—'}</td>
+                      <td>{order.deadline ? formatDate(order.deadline) : '—'}</td>
+                      <td>
+                        {order.dispatched_to ? (
+                          <span className="badge badge-success" style={{ fontSize: 12 }}>
+                            ✓ {isRtl ? `محول إلى: ${order.dispatched_to}` : `Dispatched to: ${order.dispatched_to}`}
+                          </span>
+                        ) : (
+                          <span className="badge badge-warning" style={{ fontSize: 12 }}>
+                            ⏳ {isRtl ? 'بانتظار التوجيه للقسم' : 'Pending Dispatch'}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: isRtl ? 'left' : 'right' }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            setSelectedDesignOrder(order)
+                            setDispatchDepartment(order.department || 'قسم الحديد')
+                          }}
+                        >
+                          🚀 {isRtl ? 'تفاصيل وتوجيه للقسم' : 'Details & Dispatch'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* TAB 1: أوامر التصنيع القائمة (Merged Total Across All Departments) */}
@@ -1012,7 +1230,7 @@ export default function TasksPage() {
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {isRtl ? 'حفظ أمر الهنجر' : 'Save Hangar Order'}
+                  {isRtl ? 'ارسال الامر للهنجر' : 'Send Order to Hangar'}
                 </button>
               </div>
             </form>
@@ -1105,6 +1323,98 @@ export default function TasksPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: تفاصيل وتوجيه أمر تصنيع وارد من التصميم */}
+      {/* ========================================================================= */}
+      {selectedDesignOrder && (
+        <div className="modal-backdrop" onClick={() => setSelectedDesignOrder(null)}>
+          <div className="modal-content" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📐 {isRtl ? 'تفاصيل أمر التصنيع وتوجيهه للقسم المختص' : 'Design Order Details & Department Dispatch'}</h3>
+              <button type="button" className="btn btn-secondary" onClick={() => setSelectedDesignOrder(null)}>✕</button>
+            </div>
+
+            <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+              <div style={{ background: 'var(--bg-base)', padding: 14, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)', marginBottom: 8 }}>
+                  {selectedDesignOrder.project_name || selectedDesignOrder.item_description}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
+                  <div><strong>{isRtl ? 'الرقم المرجعي:' : 'Ref:'}</strong> {selectedDesignOrder.project_ref || selectedDesignOrder.id}</div>
+                  <div><strong>{isRtl ? 'العميل:' : 'Customer:'}</strong> {selectedDesignOrder.customer_name || '—'}</div>
+                  <div><strong>{isRtl ? 'الشركة / المؤسسة:' : 'Company:'}</strong> {selectedDesignOrder.company || '—'}</div>
+                  <div><strong>{isRtl ? 'الكمية المطلوبة:' : 'Quantity:'}</strong> {selectedDesignOrder.quantity || 1}</div>
+                  <div><strong>{isRtl ? 'تاريخ الاستلام:' : 'Receipt Date:'}</strong> {selectedDesignOrder.received_date || '—'}</div>
+                  <div><strong>{isRtl ? 'موعد التسليم:' : 'Delivery Deadline:'}</strong> {selectedDesignOrder.deadline || '—'}</div>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">{isRtl ? 'ملفات ومخططات العميل الهندسية' : 'Client Files & Engineering Blueprints'}</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: 'rgba(56, 189, 248, 0.08)', borderRadius: 8, border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 22 }}>📁</span>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{selectedDesignOrder.schematics || 'Client_Drawings_Specs.pdf'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{isRtl ? 'مخططات العميل والتفاصيل التقنية' : 'Client specifications and CAD drawings'}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleDownloadFile(selectedDesignOrder.schematics || 'Client_Drawings_Specs.pdf')}
+                  >
+                    📥 {isRtl ? 'تحميل الملف' : 'Download File'}
+                  </button>
+                </div>
+              </div>
+
+              {selectedDesignOrder.instructions && (
+                <div>
+                  <label className="label">{isRtl ? 'تعليمات وملاحظات التصميم' : 'Design Notes & Instructions'}</label>
+                  <div style={{ padding: 12, background: 'var(--bg-base)', borderRadius: 8, fontSize: 13, border: '1px solid var(--border)' }}>
+                    {selectedDesignOrder.instructions}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                <label className="label" style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 14 }}>
+                  🎯 {isRtl ? 'ارسال امر تصنيع للقسم اللي بختاره: *' : 'Dispatch manufacturing order to selected department: *'}
+                </label>
+                <select
+                  className="input"
+                  value={dispatchDepartment}
+                  onChange={e => setDispatchDepartment(e.target.value)}
+                  style={{ fontSize: 15, fontWeight: 600, padding: 10 }}
+                >
+                  <option value="قسم الحديد">{isRtl ? '1- قسم الحديد' : '1- Iron Department'}</option>
+                  <option value="قسم الكهرباء والتجميع">{isRtl ? '2- قسم الكهرباء والتجميع' : '2- Electrical & Assembly'}</option>
+                  <option value="قسم الدهان">{isRtl ? '3- قسم الدهان' : '3- Painting Department'}</option>
+                  <option value="قسم الفحص والجودة">{isRtl ? '4- قسم الفحص والجودة' : '4- Quality Control (QC)'}</option>
+                </select>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {isRtl ? 'ملاحظة: الهنجر فقط من شاشة المهام يصدر أمره المباشر، بينما باقي الأقسام تستقبل أوامرها من التصميم هنا.' : 'Note: Hangar orders are issued directly from this screen, while other departments receive their orders from design here.'}
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setSelectedDesignOrder(null)}>
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleDispatchDesignOrderToDepartment(selectedDesignOrder, dispatchDepartment)}
+              >
+                🚀 {isRtl ? 'ارسال امر تصنيع للقسم اللي بختاره' : 'Send Order to Selected Department'}
+              </button>
+            </div>
           </div>
         </div>
       )}

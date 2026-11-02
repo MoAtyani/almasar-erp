@@ -86,7 +86,7 @@ export default function HRPage() {
   const [employeeForm, setEmployeeForm] = useState({
     full_name: '',
     full_name_ar: '',
-    department: 'Panel Fabrication',
+    department: 'قسم الحديد',
     role: 'technician',
     email: '',
     phone: '',
@@ -260,7 +260,7 @@ export default function HRPage() {
     setEmployeeForm({
       full_name: '',
       full_name_ar: '',
-      department: 'Panel Fabrication',
+      department: 'قسم الحديد',
       role: 'technician',
       email: '',
       phone: '',
@@ -475,12 +475,40 @@ export default function HRPage() {
   const certEmp = employees.find(e => e.id === certEmployeeId) || employees[0]
 
   const deptTranslations: Record<string, string> = {
-    'Panel Fabrication': 'تجميع وهياكل اللوحات',
-    'Busbar & Wiring': 'تشكيل البسبار والأسلاك',
-    'Quality Assurance': 'ضبط الجودة وفحص FAT',
-    'Engineering & Estimation': 'الهندسة والتسعير الفني',
-    'Production Management': 'إدارة وتخطيط الإنتاج',
-    'Engineering & Design': 'الهندسة والتصميم'
+    '1- قسم الحديد': '1- قسم الحديد',
+    'قسم الحديد': 'قسم الحديد',
+    '2- قسم الهنجر': '2- قسم الهنجر',
+    'قسم الهنجر': 'قسم الهنجر',
+    '3- قسم الكهرباء والتجميع': '3- قسم الكهرباء والتجميع',
+    'قسم الكهرباء والتجميع': 'قسم الكهرباء والتجميع',
+    '4- قسم الفحص والجودة': '4- قسم الفحص والجودة',
+    'قسم الفحص والجودة': 'قسم الفحص والجودة',
+    '5- قسم الدهان': '5- قسم الدهان',
+    'قسم الدهان': 'قسم الدهان',
+    '6- قسم المحاسبة والمالية': '6- قسم المحاسبة والمالية',
+    'قسم المحاسبة والمالية': 'قسم المحاسبة والمالية',
+    '7- قسم التصميم والتسعير': '7- قسم التصميم والتسعير',
+    'قسم التصميم والتسعير': 'قسم التصميم والتسعير',
+    '8- قسم الموارد البشرية': '8- قسم الموارد البشرية',
+    'قسم الموارد البشرية': 'قسم الموارد البشرية',
+    '9- قسم التحصيل': '9- قسم التحصيل',
+    'قسم التحصيل': 'قسم التحصيل',
+    '10- قسم المشتريات': '10- قسم المشتريات',
+    'قسم المشتريات': 'قسم المشتريات',
+    '11- قسم الانتاج': '11- قسم الانتاج',
+    'قسم الانتاج': 'قسم الانتاج',
+    '12- المستودعات': '12- المستودعات',
+    'المستودعات': 'المستودعات',
+    '13- الحركة': '13- الحركة',
+    'الحركة': 'الحركة',
+    '14- قسم المشاريع': '14- قسم المشاريع',
+    'قسم المشاريع': 'قسم المشاريع',
+    'Panel Fabrication': 'قسم الحديد',
+    'Busbar & Wiring': 'قسم الكهرباء والتجميع',
+    'Quality Assurance': 'قسم الفحص والجودة',
+    'Engineering & Estimation': 'قسم التصميم والتسعير',
+    'Production Management': 'قسم الانتاج',
+    'Engineering & Design': 'قسم التصميم والتسعير'
   }
 
   return (
@@ -489,9 +517,6 @@ export default function HRPage() {
       titleAr="إدارة الموارد البشرية، كادر المصنع ومسير الرواتب المتقدم"
       actions={
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowRunPayrollModal(true)}>
-            ⚡ {isRtl ? 'تشغيل مسير الرواتب الشهري' : 'Run Monthly Payroll'}
-          </button>
           <button className="btn btn-primary btn-sm" onClick={openAddEmployeeModal}>
             {isRtl ? '+ تعريف بطاقة موظف جديدة' : '+ New Employee Profile Card'}
           </button>
@@ -1504,9 +1529,9 @@ export default function HRPage() {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>مساهمة الضمان (الشركة)</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{isRtl ? 'بدلات أخرى' : 'Other Allowances'}</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#0ea5e9' }}>
-                      {selectedEmployeeForCard.social_security_rate_company || 14.25}% ({formatCurrency((selectedEmployeeForCard.basic_salary * (selectedEmployeeForCard.social_security_rate_company || 14.25)) / 100)})
+                      {formatCurrency(selectedEmployeeForCard.other_allowances || 0)}
                     </div>
                   </div>
                 </div>
@@ -1609,11 +1634,20 @@ export default function HRPage() {
                       value={employeeForm.department}
                       onChange={e => setEmployeeForm({ ...employeeForm, department: e.target.value })}
                     >
-                      <option value="Panel Fabrication">{isRtl ? 'تجميع وهياكل اللوحات' : 'Panel Fabrication'}</option>
-                      <option value="Busbar & Wiring">{isRtl ? 'تشكيل البسبار والأسلاك' : 'Busbar & Wiring'}</option>
-                      <option value="Quality Assurance">{isRtl ? 'ضبط الجودة وفحص FAT' : 'Quality Assurance'}</option>
-                      <option value="Engineering & Estimation">{isRtl ? 'الهندسة والتسعير الفني' : 'Engineering & Estimation'}</option>
-                      <option value="Production Management">{isRtl ? 'إدارة وتخطيط الإنتاج' : 'Production Management'}</option>
+                      <option value="قسم الحديد">{isRtl ? '1- قسم الحديد' : '1- Iron Department'}</option>
+                      <option value="قسم الهنجر">{isRtl ? '2- قسم الهنجر' : '2- Hangar Department'}</option>
+                      <option value="قسم الكهرباء والتجميع">{isRtl ? '3- قسم الكهرباء والتجميع' : '3- Electrical & Assembly'}</option>
+                      <option value="قسم الفحص والجودة">{isRtl ? '4- قسم الفحص والجودة' : '4- Quality & Testing'}</option>
+                      <option value="قسم الدهان">{isRtl ? '5- قسم الدهان' : '5- Painting Department'}</option>
+                      <option value="قسم المحاسبة والمالية">{isRtl ? '6- قسم المحاسبة والمالية' : '6- Accounting & Finance'}</option>
+                      <option value="قسم التصميم والتسعير">{isRtl ? '7- قسم التصميم والتسعير' : '7- Design & Pricing'}</option>
+                      <option value="قسم الموارد البشرية">{isRtl ? '8- قسم الموارد البشرية' : '8- Human Resources'}</option>
+                      <option value="قسم التحصيل">{isRtl ? '9- قسم التحصيل' : '9- Collection Department'}</option>
+                      <option value="قسم المشتريات">{isRtl ? '10- قسم المشتريات' : '10- Purchasing Department'}</option>
+                      <option value="قسم الانتاج">{isRtl ? '11- قسم الانتاج' : '11- Production Department'}</option>
+                      <option value="المستودعات">{isRtl ? '12- المستودعات' : '12- Warehouses'}</option>
+                      <option value="الحركة">{isRtl ? '13- الحركة' : '13- Fleet & Movement'}</option>
+                      <option value="قسم المشاريع">{isRtl ? '14- قسم المشاريع' : '14- Projects Department'}</option>
                     </select>
                   </div>
                   <div>
@@ -1708,13 +1742,12 @@ export default function HRPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'نسبة مساهمة الشركة (%)' : 'Company SS %'}</label>
+                    <label className="label">{isRtl ? 'بدلات أخرى ($)' : 'Other Allowances ($)'}</label>
                     <input
                       type="number"
-                      step="0.01"
                       className="input"
-                      value={employeeForm.social_security_rate_company}
-                      onChange={e => setEmployeeForm({ ...employeeForm, social_security_rate_company: parseFloat(e.target.value) || 14.25 })}
+                      value={employeeForm.other_allowances}
+                      onChange={e => setEmployeeForm({ ...employeeForm, other_allowances: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>

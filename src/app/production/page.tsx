@@ -165,7 +165,7 @@ export default function ProductionPage() {
             📺 {isRtl ? 'عرض الشاشة / TV' : 'TV Display'}
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => setShowOrderModal(true)}>
-            {isRtl ? '+ إصدار أمر تشغيل جديد' : '+ New Production Order'}
+            {isRtl ? 'امر تصنيع للهنجر' : 'Hangar Manufacturing Order'}
           </button>
         </div>
       }

@@ -14,9 +14,13 @@ interface SalesLead {
   customer_phone?: string
   expected_revenue: number
   probability: number
-  product_category: 'electrical_panels' | 'cable_tray_enclosure' | 'materials_parts' | string
+  product_category: 'iron' | 'hangar' | 'electrical' | 'misc' | string
   outcome: 'won' | 'in_progress' | 'pending' | string
   sales_status: 'under_manufacturing' | 'ready_for_delivery' | 'delivered' | string
+  pricing_status?: 'pending_response' | 'price_approved' | 'price_rejected'
+  payment_method?: 'cash' | 'credit' | 'gm_approval'
+  invoice_name?: string
+  files?: string
   description?: string
   created_at: string
 }
@@ -33,12 +37,22 @@ interface ProjectTemplate {
 
 const CATEGORY_MAP: Record<string, { ar: string; en: string; icon: string; color: string }> = {
   all: { ar: 'الكل', en: 'All Departments', icon: '🏢', color: '#38bdf8' },
-  iron: { ar: 'مشاريع الحديد', en: 'Iron Projects', icon: '🔩', color: '#f59e0b' },
-  hangar: { ar: 'مشاريع الهنجر', en: 'Hangar Projects', icon: '🏭', color: '#06b6d4' },
-  electrical: { ar: 'مشاريع الكهرباء والتجميع', en: 'Electrical & Assembly Projects', icon: '⚡', color: '#8b5cf6' },
-  electrical_panels: { ar: 'مشاريع الكهرباء والتجميع', en: 'Electrical & Assembly Projects', icon: '⚡', color: '#8b5cf6' },
-  cable_tray_enclosure: { ar: 'مشاريع الهنجر', en: 'Hangar Projects', icon: '🏭', color: '#06b6d4' },
-  materials_parts: { ar: 'مشاريع الحديد', en: 'Iron Projects', icon: '🔩', color: '#f59e0b' }
+  iron: { ar: 'الحديد', en: 'Iron', icon: '🔩', color: '#f59e0b' },
+  hangar: { ar: 'الهنجر', en: 'Hangar', icon: '🏭', color: '#06b6d4' },
+  electrical: { ar: 'الكهرباء والتجميع', en: 'Electrical & Assembly', icon: '⚡', color: '#8b5cf6' },
+  misc: { ar: 'متفرقات', en: 'Miscellaneous', icon: '📦', color: '#ec4899' },
+  // Backward compatibility aliases
+  electrical_panels: { ar: 'الكهرباء والتجميع', en: 'Electrical & Assembly', icon: '⚡', color: '#8b5cf6' },
+  cable_tray_enclosure: { ar: 'الهنجر', en: 'Hangar', icon: '🏭', color: '#06b6d4' },
+  materials_parts: { ar: 'الحديد', en: 'Iron', icon: '🔩', color: '#f59e0b' }
+}
+
+const VISIBLE_CATEGORIES = ['all', 'iron', 'hangar', 'electrical', 'misc']
+
+const PRICING_STATUS_MAP: Record<string, { ar: string; en: string; color: string; bg: string }> = {
+  pending_response: { ar: 'في انتظار رد العميل', en: 'Pending Response', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
+  price_approved: { ar: 'موافقة على السعر', en: 'Price Approved', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
+  price_rejected: { ar: 'عدم موافقة على السعر', en: 'Price Rejected', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' },
 }
 
 const STATUS_MAP: Record<string, { ar: string; en: string; color: string; bg: string }> = {
@@ -55,7 +69,7 @@ const OUTCOME_MAP: Record<string, { ar: string; en: string; color: string }> = {
 
 export default function CRMPage() {
   const { lang, isRtl } = useLanguage()
-  const [activeTab, setActiveTab] = useState<'sales_orders' | 'templates' | 'pipeline'>('sales_orders')
+  const [activeTab, setActiveTab] = useState<'sales_orders' | 'pipeline'>('sales_orders')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [leads, setLeads] = useState<SalesLead[]>([])
@@ -70,7 +84,16 @@ export default function CRMPage() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [selectedLead, setSelectedLead] = useState<SalesLead | null>(null)
 
-  // Form
+  // Pricing Approval & Send to Design Modal
+  const [showApprovalModal, setShowApprovalModal] = useState(false)
+  const [approvalLead, setApprovalLead] = useState<SalesLead | null>(null)
+  const [approvalForm, setApprovalForm] = useState({
+    payment_method: 'cash' as 'cash' | 'credit' | 'gm_approval',
+    invoice_name: '',
+    files_note: ''
+  })
+
+  // Form (+ تسعير مشروع جديد)
   const [form, setForm] = useState({
     name: '',
     reference: '',
@@ -82,6 +105,10 @@ export default function CRMPage() {
     product_category: 'iron',
     outcome: 'won',
     sales_status: 'under_manufacturing',
+    pricing_status: 'pending_response' as 'pending_response' | 'price_approved' | 'price_rejected',
+    payment_method: 'cash' as 'cash' | 'credit' | 'gm_approval',
+    invoice_name: '',
+    files: '',
     description: '',
     is_template: false,
     template_name: ''
@@ -168,6 +195,90 @@ export default function CRMPage() {
     }
   }
 
+  async function handleUpdatePricingStatus(lead: SalesLead, newStatus: 'pending_response' | 'price_approved' | 'price_rejected') {
+    if (newStatus === 'price_approved') {
+      setApprovalLead(lead)
+      setApprovalForm({
+        payment_method: (lead.payment_method as any) || 'cash',
+        invoice_name: lead.invoice_name || `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        files_note: lead.files || 'مخططات وتفاصيل اللوحة المعتمدة.pdf'
+      })
+      setShowApprovalModal(true)
+      return
+    }
+
+    try {
+      await fetch('/api/sales', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: lead.id,
+          pricing_status: newStatus,
+          outcome: newStatus === 'price_rejected' ? 'lost' : 'pending'
+        })
+      })
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, pricing_status: newStatus } : l))
+    } catch (e) {
+      console.error('Error updating pricing status:', e)
+    }
+  }
+
+  async function handleConfirmApprovalAndSendToDesign(e: React.FormEvent) {
+    e.preventDefault()
+    if (!approvalLead) return
+
+    try {
+      await fetch('/api/sales', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: approvalLead.id,
+          pricing_status: 'price_approved',
+          payment_method: approvalForm.payment_method,
+          invoice_name: approvalForm.invoice_name,
+          files: approvalForm.files_note,
+          outcome: 'won'
+        })
+      })
+
+      // Queue into design incoming projects (LocalStorage sync so Engineering immediately shows it under استقبال مشروع جديد)
+      const designIncoming = {
+        id: `des-${Date.now()}`,
+        sales_lead_id: approvalLead.id,
+        project_ref: approvalLead.reference,
+        name: approvalLead.name,
+        customer_name: approvalLead.customer_name,
+        company: approvalLead.company,
+        product_category: approvalLead.product_category,
+        expected_revenue: approvalLead.expected_revenue,
+        payment_method: approvalForm.payment_method,
+        invoice_name: approvalForm.invoice_name,
+        client_files: approvalForm.files_note || 'ملفات ومواصفات العميل المعتمدة.pdf',
+        received_date: new Date().toISOString().split('T')[0],
+        delivery_date: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        status: 'received_from_sales'
+      }
+
+      if (typeof window !== 'undefined') {
+        const stored = JSON.parse(localStorage.getItem('almasar_design_projects') || '[]')
+        localStorage.setItem('almasar_design_projects', JSON.stringify([designIncoming, ...stored.filter((p: any) => p.sales_lead_id !== approvalLead.id)]))
+      }
+
+      setLeads(prev => prev.map(l => l.id === approvalLead.id ? {
+        ...l,
+        pricing_status: 'price_approved',
+        payment_method: approvalForm.payment_method,
+        invoice_name: approvalForm.invoice_name,
+        files: approvalForm.files_note
+      } : l))
+
+      setShowApprovalModal(false)
+      alert(isRtl ? 'تمت الموافقة على السعر وإرسال المشروع مباشرة إلى قسم التصميم بنجاح!' : 'Quotation approved and dispatched to Design department successfully!')
+    } catch (err) {
+      console.error('Error approving and sending to design:', err)
+    }
+  }
+
   async function handleEditSalesOrder(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedLead) return
@@ -244,9 +355,13 @@ export default function CRMPage() {
       customer_email: '',
       customer_phone: '',
       expected_revenue: String(tpl.estimated_cost || 0),
-      product_category: tpl.category || 'electrical_panels',
+      product_category: tpl.category || 'iron',
       outcome: 'won',
       sales_status: 'under_manufacturing',
+      pricing_status: 'pending_response',
+      payment_method: 'cash',
+      invoice_name: '',
+      files: '',
       description: tpl.description || '',
       is_template: false,
       template_name: tpl.template_name
@@ -267,6 +382,10 @@ export default function CRMPage() {
       product_category: 'iron',
       outcome: 'won',
       sales_status: 'under_manufacturing',
+      pricing_status: 'pending_response',
+      payment_method: 'cash',
+      invoice_name: '',
+      files: '',
       description: '',
       is_template: false,
       template_name: ''
@@ -287,6 +406,10 @@ export default function CRMPage() {
       product_category: lead.product_category || 'iron',
       outcome: lead.outcome || 'won',
       sales_status: lead.sales_status || 'under_manufacturing',
+      pricing_status: (lead as any).pricing_status || 'pending_response',
+      payment_method: (lead as any).payment_method || 'cash',
+      invoice_name: (lead as any).invoice_name || '',
+      files: (lead as any).files || '',
       description: lead.description || '',
       is_template: false,
       template_name: ''
@@ -326,7 +449,7 @@ export default function CRMPage() {
       actions={
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-primary btn-sm" onClick={() => { resetForm(); setShowAddModal(true) }}>
-            {isRtl ? '+ مشروع جديد' : '+ New Project'}
+            {isRtl ? '+ تسعير مشروع جديد' : '+ New Project Pricing'}
           </button>
         </div>
       }
@@ -342,18 +465,11 @@ export default function CRMPage() {
             📋 {isRtl ? 'المبيعات ومشاريع الإنتاج' : 'Sales & Production Projects'}
           </button>
           <button
-            onClick={() => setActiveTab('templates')}
-            className={`btn btn-sm ${activeTab === 'templates' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ fontWeight: 600 }}
-          >
-            📑 {isRtl ? 'النماذج (Templates)' : 'Templates Catalogue'} ({templates.length})
-          </button>
-          <button
             onClick={() => setActiveTab('pipeline')}
             className={`btn btn-sm ${activeTab === 'pipeline' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ fontWeight: 600 }}
           >
-            📊 {isRtl ? 'مسار المبيعات التفاعلي' : 'Sales Pipeline'}
+            📊 {isRtl ? 'مسار المبيعات' : 'Sales Pipeline'}
           </button>
         </div>
 
@@ -396,9 +512,18 @@ export default function CRMPage() {
               {isRtl ? 'تصنيف القسم / خط الإنتاج (العميل / الشركة / القسم):' : 'Department & Product Line Category:'}
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {Object.entries(CATEGORY_MAP).map(([key, info]) => {
+              {VISIBLE_CATEGORIES.map(key => {
+                const info = CATEGORY_MAP[key]
+                if (!info) return null
                 const isSelected = selectedCategory === key
-                const count = key === 'all' ? leads.length : leads.filter(l => l.product_category === key).length
+                const count = key === 'all'
+                  ? leads.length
+                  : leads.filter(l => {
+                      if (key === 'iron') return l.product_category === 'iron' || l.product_category === 'materials_parts'
+                      if (key === 'hangar') return l.product_category === 'hangar' || l.product_category === 'cable_tray_enclosure'
+                      if (key === 'electrical') return l.product_category === 'electrical' || l.product_category === 'electrical_panels'
+                      return l.product_category === key
+                    }).length
                 return (
                   <button
                     key={key}
@@ -483,6 +608,7 @@ export default function CRMPage() {
                   <th>{isRtl ? 'الشركة / المؤسسة' : 'Company'}</th>
                   <th>{isRtl ? 'القسم' : 'Department'}</th>
                   <th>{isRtl ? 'القيمة' : 'Value'}</th>
+                  <th>{isRtl ? 'مرحلة الرد على السعر' : 'Price Response'}</th>
                   <th>{isRtl ? 'تفاصيل وملاحظات المشروع' : 'Details & Notes'}</th>
                   <th>{isRtl ? 'خيارات' : 'Options'}</th>
                 </tr>
@@ -526,6 +652,82 @@ export default function CRMPage() {
                       <td style={{ fontWeight: 700 }}>
                         {formatCurrency(lead.expected_revenue)}
                       </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '3px 8px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: (PRICING_STATUS_MAP[lead.pricing_status || 'pending_response']?.bg || 'rgba(245, 158, 11, 0.15)'),
+                              color: (PRICING_STATUS_MAP[lead.pricing_status || 'pending_response']?.color || '#f59e0b'),
+                              border: `1px solid ${(PRICING_STATUS_MAP[lead.pricing_status || 'pending_response']?.color || '#f59e0b')}44`
+                            }}
+                          >
+                            ● {isRtl ? PRICING_STATUS_MAP[lead.pricing_status || 'pending_response']?.ar : PRICING_STATUS_MAP[lead.pricing_status || 'pending_response']?.en}
+                          </span>
+
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button
+                              type="button"
+                              className="btn btn-xs"
+                              style={{
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                background: lead.pricing_status === 'pending_response' ? '#f59e0b33' : 'var(--bg-base)',
+                                color: '#f59e0b',
+                                border: '1px solid #f59e0b55'
+                              }}
+                              onClick={() => handleUpdatePricingStatus(lead, 'pending_response')}
+                              title={isRtl ? 'في انتظار رد العميل' : 'Pending Response'}
+                            >
+                              ⏳ {isRtl ? 'انتظار' : 'Pending'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-xs"
+                              style={{
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                background: lead.pricing_status === 'price_approved' ? '#10b98133' : 'var(--bg-base)',
+                                color: '#10b981',
+                                border: '1px solid #10b98155',
+                                fontWeight: 700
+                              }}
+                              onClick={() => handleUpdatePricingStatus(lead, 'price_approved')}
+                              title={isRtl ? 'موافقة على السعر وإرسال للتصميم' : 'Price Approved'}
+                            >
+                              ✓ {isRtl ? 'موافقة' : 'Approve'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-xs"
+                              style={{
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                background: lead.pricing_status === 'price_rejected' ? '#ef444433' : 'var(--bg-base)',
+                                color: '#ef4444',
+                                border: '1px solid #ef444455'
+                              }}
+                              onClick={() => handleUpdatePricingStatus(lead, 'price_rejected')}
+                              title={isRtl ? 'عدم موافقة على السعر' : 'Price Rejected'}
+                            >
+                              ✕ {isRtl ? 'عدم موافقة' : 'Reject'}
+                            </button>
+                          </div>
+
+                          {lead.pricing_status === 'price_approved' && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '4px 6px', borderRadius: 4 }}>
+                              <div>💳 {lead.payment_method === 'cash' ? (isRtl ? 'نقدي' : 'Cash') : lead.payment_method === 'credit' ? (isRtl ? 'ذمم' : 'Credit') : (isRtl ? 'موافقة المدير العام' : 'GM Approval')}</div>
+                              {lead.invoice_name && <div>🧾 {lead.invoice_name}</div>}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ maxWidth: 280 }}>
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                           {lead.description || '—'}
@@ -561,84 +763,6 @@ export default function CRMPage() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: TEMPLATES (النماذج) */}
-      {activeTab === 'templates' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div className="card" style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  📑 {isRtl ? 'قوالب ونماذج مشاريع الإنتاج (النماذج)' : 'Production Projects Templates'}
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  {isRtl ? 'نماذج قياسية جاهزة لإطلاق مشاريع اللوحات الكهربائية، الكابل تري، وتوريد المواد بضغطة زر واحدة' : 'Pre-configured blueprints to quickly start electrical panels, cable trays, and parts orders'}
-                </p>
-              </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowTemplateModal(true)}>
-                + {isRtl ? 'إضافة نموذج جديد' : 'New Template'}
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-              {templates.map(tpl => {
-                const catInfo = CATEGORY_MAP[tpl.category] || CATEGORY_MAP.electrical_panels
-                return (
-                  <div
-                    key={tpl.id}
-                    style={{
-                      background: 'var(--bg-base)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 12,
-                      padding: 20,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      gap: 14,
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                        <span
-                          style={{
-                            padding: '3px 8px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background: `${catInfo.color}15`,
-                            color: catInfo.color,
-                            border: `1px solid ${catInfo.color}33`
-                          }}
-                        >
-                          {catInfo.icon} {catInfo[lang] || catInfo.en}
-                        </span>
-                        <strong style={{ fontSize: 14, color: 'var(--gold)' }}>
-                          {formatCurrency(tpl.estimated_cost)}
-                        </strong>
-                      </div>
-                      <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-                        {isRtl ? (tpl.template_name_ar || tpl.template_name) : tpl.template_name}
-                      </h4>
-                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {tpl.description}
-                      </p>
-                    </div>
-
-                    <button
-                      className="btn btn-primary"
-                      style={{ width: '100%', justifyContent: 'center', fontWeight: 700 }}
-                      onClick={() => applyTemplate(tpl)}
-                    >
-                      🚀 {isRtl ? 'استخدام النموذج وإنشاء مشروع بيع' : 'Use Template & Create Project'}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
           </div>
         </div>
       )}
@@ -697,17 +821,17 @@ export default function CRMPage() {
         </div>
       )}
 
-      {/* MODAL: ADD SALES PROJECT */}
+      {/* MODAL: ADD / NEW PROJECT PRICING (+ تسعير مشروع جديد) */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleCreateSalesOrder}>
               <div className="modal-header">
-                <h3>{isRtl ? 'مشروع جديد' : 'New Project'}</h3>
+                <h3>💰 {isRtl ? 'تسعير مشروع جديد' : 'New Project Pricing / Quotation'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>✕</button>
               </div>
 
-              <div style={{ padding: 24, display: 'grid', gap: 14 }}>
+              <div style={{ padding: 24, display: 'grid', gap: 14, maxHeight: '75vh', overflowY: 'auto' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12 }}>
                   <div>
                     <label className="label">{isRtl ? 'اسم المشروع *' : 'Project Name *'}</label>
@@ -764,14 +888,16 @@ export default function CRMPage() {
                       value={form.product_category}
                       onChange={e => setForm({ ...form, product_category: e.target.value })}
                     >
-                      <option value="iron">{isRtl ? 'أ- مشاريع الحديد' : 'Iron Projects'}</option>
-                      <option value="hangar">{isRtl ? 'ب- مشاريع الهنجر' : 'Hangar Projects'}</option>
-                      <option value="electrical">{isRtl ? 'ج- مشاريع الكهرباء والتجميع' : 'Electrical & Assembly Projects'}</option>
+                      <option value="iron">{isRtl ? '1- الحديد' : '1- Iron'}</option>
+                      <option value="hangar">{isRtl ? '2- الهنجر' : '2- Hangar'}</option>
+                      <option value="electrical">{isRtl ? '3- الكهرباء والتجميع' : '3- Electrical & Assembly'}</option>
+                      <option value="misc">{isRtl ? '4- متفرقات' : '4- Miscellaneous'}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="label">{isRtl ? 'القيمة (SAR)' : 'Value (SAR)'}</label>
+                    <label className="label">{isRtl ? 'القيمة (SAR) *' : 'Value (SAR) *'}</label>
                     <input
+                      required
                       type="number"
                       className="input"
                       placeholder="0.00"
@@ -782,7 +908,40 @@ export default function CRMPage() {
                 </div>
 
                 <div>
-                  <label className="label">{isRtl ? 'تفاصيل وملاحظات المشروع' : 'Project Details & Notes'}</label>
+                  <label className="label">{isRtl ? 'تحميل ملفات وتفاصيل' : 'Upload Files & Details'}</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      id="crm-file-upload"
+                      style={{ display: 'none' }}
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) setForm({ ...form, files: file.name })
+                      }}
+                    />
+                    <label
+                      htmlFor="crm-file-upload"
+                      className="btn btn-secondary btn-sm"
+                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      📎 {isRtl ? 'اختر ملف العميل / المخطط' : 'Choose Client File / Schematic'}
+                    </label>
+                    <input
+                      type="text"
+                      className="input"
+                      style={{ flex: 1 }}
+                      placeholder={isRtl ? 'اسم الملف أو رابط المخطط (مثال: specs-sld.pdf)' : 'File name or spec notes...'}
+                      value={form.files}
+                      onChange={e => setForm({ ...form, files: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {isRtl ? 'الملفات المرفقة سيتم إتاحة تحميلها ونقلها تلقائياً للمخططات الهندسية وقسم التصميم.' : 'Uploaded files will be transferred to Engineering Design upon approval.'}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? 'ملاحظات المشروع' : 'Project Notes'}</label>
                   <textarea
                     className="input"
                     rows={3}
@@ -798,7 +957,84 @@ export default function CRMPage() {
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {isRtl ? 'حفظ المشروع' : 'Save Project'}
+                  {isRtl ? 'حفظ تسعير المشروع' : 'Save Quotation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: موافقة على السعر وإرسال للتصميم */}
+      {showApprovalModal && approvalLead && (
+        <div className="modal-backdrop" onClick={() => setShowApprovalModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleConfirmApprovalAndSendToDesign}>
+              <div className="modal-header">
+                <h3>✓ {isRtl ? 'موافقة على السعر وإرسال للتصميم' : 'Price Approval & Send to Design'}</h3>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowApprovalModal(false)}>✕</button>
+              </div>
+
+              <div style={{ padding: 24, display: 'grid', gap: 16 }}>
+                <div style={{ background: 'var(--bg-elevated)', padding: 14, borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>
+                    {approvalLead.name} ({approvalLead.reference})
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <span>{isRtl ? 'العميل: ' : 'Customer: '}<strong>{approvalLead.customer_name}</strong></span>
+                    {approvalLead.company && <span> • <strong>{approvalLead.company}</strong></span>}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginTop: 6 }}>
+                    {isRtl ? 'قيمة المشروع: ' : 'Value: '} {formatCurrency(approvalLead.expected_revenue)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? '1- طريقة الدفع *' : '1- Payment Method *'}</label>
+                  <select
+                    className="input"
+                    value={approvalForm.payment_method}
+                    onChange={e => setApprovalForm({ ...approvalForm, payment_method: e.target.value as any })}
+                  >
+                    <option value="cash">{isRtl ? 'نقدي (Cash)' : 'Cash'}</option>
+                    <option value="credit">{isRtl ? 'ذمم (Accounts Receivable / Credit)' : 'Credit / Receivables'}</option>
+                    <option value="gm_approval">{isRtl ? 'موافقة المدير العام (GM Approval)' : 'General Manager Approval'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? '2- اسم الفاتورة *' : '2- Invoice Name *'}</label>
+                  <input
+                    required
+                    type="text"
+                    className="input"
+                    placeholder={isRtl ? 'مثال: فاتورة تسعير مشروع رقم INV-2026-089' : 'Invoice name / reference...'}
+                    value={approvalForm.invoice_name}
+                    onChange={e => setApprovalForm({ ...approvalForm, invoice_name: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? '3- ملفات ومواصفات العميل المرفقة' : '3- Attached Files & Specs'}</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={approvalForm.files_note}
+                    onChange={e => setApprovalForm({ ...approvalForm, files_note: e.target.value })}
+                    placeholder={isRtl ? 'مخططات وجدول كميات العميل.pdf' : 'Client schematics & BoQ...'}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {isRtl ? 'سيتم تحويل هذا المشروع فوراً إلى صفحة التصميم (استقبال مشروع جديد) لبدء إعداد P.O المستودع وأمر التصنيع.' : 'This project will be immediately queued in the Design page under incoming projects.'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowApprovalModal(false)}>
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700 }}>
+                  🚀 {isRtl ? 'ارسال للتصميم' : 'Send to Design'}
                 </button>
               </div>
             </form>
@@ -869,9 +1105,10 @@ export default function CRMPage() {
                       value={form.product_category}
                       onChange={e => setForm({ ...form, product_category: e.target.value })}
                     >
-                      <option value="iron">{isRtl ? 'أ- مشاريع الحديد' : 'Iron Projects'}</option>
-                      <option value="hangar">{isRtl ? 'ب- مشاريع الهنجر' : 'Hangar Projects'}</option>
-                      <option value="electrical">{isRtl ? 'ج- مشاريع الكهرباء والتجميع' : 'Electrical & Assembly Projects'}</option>
+                      <option value="iron">{isRtl ? '1- الحديد' : '1- Iron'}</option>
+                      <option value="hangar">{isRtl ? '2- الهنجر' : '2- Hangar'}</option>
+                      <option value="electrical">{isRtl ? '3- الكهرباء والتجميع' : '3- Electrical & Assembly'}</option>
+                      <option value="misc">{isRtl ? '4- متفرقات' : '4- Miscellaneous'}</option>
                     </select>
                   </div>
                   <div>
