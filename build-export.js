@@ -1,9 +1,52 @@
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const apiDir = path.join(__dirname, 'src', 'app', 'api');
 const backupDir = path.join(__dirname, '__api_backup');
+
+// Benign stderr patterns that must NOT cause a non-zero exit
+const BENIGN_STDERR = [
+  /Node\.js \d+ and below are deprecated/,
+  /Please upgrade to Node\.js/,
+  /supabase\/supabase-js/,
+  /supabase\/discussions/,
+  /Wrangler.*out-of-date/,
+  /Please update to the latest version/,
+  /Run `npm install.*wrangler/,
+  /After installation, run Wrangler/,
+];
+
+function isBenign(line) {
+  return BENIGN_STDERR.some(re => re.test(line));
+}
+
+/**
+ * Run a command, forward stdout/stderr to our process, but suppress benign
+ * warning lines from stderr so PowerShell does not treat them as errors.
+ * Throws if the child exits with a non-zero code.
+ */
+function runFiltered(cmd, args) {
+  const result = spawnSync(cmd, args, {
+    stdio: ['inherit', 'inherit', 'pipe'],
+    shell: process.platform === 'win32',
+    encoding: 'utf8',
+  });
+
+  // Print stderr, skipping known-benign lines
+  if (result.stderr) {
+    const lines = result.stderr.split(/\r?\n/);
+    for (const line of lines) {
+      if (line.trim() && !isBenign(line)) {
+        process.stderr.write(line + '\n');
+      }
+    }
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Command failed with exit code ${result.status}: ${cmd} ${args.join(' ')}`);
+  }
+}
 
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -52,8 +95,10 @@ try {
     deleteDirSync(apiDir);
     console.log('Removed src/app/api temporarily for static export');
   }
-  console.log('Running npx next build...');
-  execSync('npx next build', { stdio: 'inherit' });
+  console.log('Running next build...');
+  // Use inherit for stdout so build progress prints live; filter stderr
+  runFiltered('npx', ['next', 'build']);
+  console.log('Build complete.');
 } finally {
   restore();
 }
