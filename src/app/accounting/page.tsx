@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Invoice, InvoiceState, InvoiceType } from '@/lib/types'
 import { INVOICE_STATE_LABELS, formatCurrency, formatDate } from '@/lib/constants'
 import { useLanguage } from '@/context/LanguageContext'
+import TransactionLedger from '@/components/TransactionLedger'
 
 interface LocalInvoice extends Invoice {
   partner_name_ar?: string
@@ -91,6 +92,7 @@ export default function AccountingPage() {
   const { lang, isRtl } = useLanguage()
   const [invoices, setInvoices] = useState<LocalInvoice[]>(SEED_INVOICES)
   const [activeTab, setActiveTab] = useState<InvoiceType>('customer')
+  const [mainView, setMainView] = useState<'invoices' | 'ledger'>('invoices')
   const [filterState, setFilterState] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -249,6 +251,29 @@ export default function AccountingPage() {
         </div>
       }
     >
+      {/* ── Main View Switcher ─────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        <button
+          className={`btn ${mainView === 'invoices' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setMainView('invoices')}
+        >
+          📄 {isRtl ? 'الفواتير والمستحقات' : 'Invoices & Payables'}
+        </button>
+        <button
+          className={`btn ${mainView === 'ledger' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setMainView('ledger')}
+          style={mainView === 'ledger' ? { background: 'var(--purple)', borderColor: 'var(--purple)' } : {}}
+        >
+          📋 {isRtl ? 'قائمة بالحركات' : 'Transactions Ledger'}
+        </button>
+      </div>
+
+      {/* ── Conditional Render: Invoices view or Ledger view ──── */}
+      {mainView === 'ledger' ? (
+        <TransactionLedger onNewVoucher={() => setShowCreateModal(true)} />
+      ) : (
+      <>
+
       {/* Financial Overview KPIs */}
       <div className="kpi-grid">
         <div className="kpi-card accent">
@@ -410,6 +435,9 @@ export default function AccountingPage() {
           </table>
         </div>
       </div>
+
+      </> /* end mainView === 'invoices' */
+      )}
 
       {/* View / Print Invoice Modal */}
       {selectedInvoice && (
