@@ -31,7 +31,7 @@ function runFiltered(cmd, args, label) {
 
   const result = spawnSync(cmd, args, {
     stdio: ['inherit', 'inherit', 'pipe'],
-    shell: process.platform === 'win32',
+    shell: true,
     encoding: 'utf8',
     cwd: __dirname,
   });

@@ -29,7 +29,7 @@ function isBenign(line) {
 function runFiltered(cmd, args) {
   const result = spawnSync(cmd, args, {
     stdio: ['inherit', 'inherit', 'pipe'],
-    shell: process.platform === 'win32',
+    shell: true,
     encoding: 'utf8',
   });
 
