@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { useLanguage } from '@/context/LanguageContext'
 import { formatDate } from '@/lib/constants'
+import { addNotification } from '@/lib/notifications'
 
 type MainTab = 'design_incoming' | 'orders' | 'iron' | 'hangar' | 'electrical'
 
@@ -185,6 +186,91 @@ export default function TasksPage() {
             notes: `[وارد من التصميم] ${order.project_name || order.item_description}`
           })
         }).catch(() => {})
+      }
+
+      // Sync with dedicated shop-floor iPad department pages
+      if (typeof window !== 'undefined') {
+        if (dept === 'قسم الحديد') {
+          const newSteelOrder = {
+            id: `STL-${Date.now().toString().slice(-4)}`,
+            reference: order.project_ref || `REF-${Date.now().toString().slice(-4)}`,
+            projectName: order.project_name || order.item_description || 'أمر تصنيع حديد',
+            customerName: order.customer_name || order.company,
+            receiptDate: order.received_date || new Date().toISOString().split('T')[0],
+            deliveryDate: order.deadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+            blueprintName: order.schematics || 'Outdoor_Enclosure_LaserCut_Rev3.pdf',
+            notes: order.instructions || '',
+            status: 'pending' as const,
+            updatedAt: new Date().toISOString()
+          }
+          const existing = JSON.parse(localStorage.getItem('almasar_dept_orders_steel') || '[]')
+          localStorage.setItem('almasar_dept_orders_steel', JSON.stringify([newSteelOrder, ...existing]))
+          addNotification({
+            type: 'new_manufacturing_order',
+            department: 'steel',
+            targetSections: ['steel', 'tasks_production'],
+            targetSection: 'steel',
+            projectRef: newSteelOrder.reference,
+            projectName: newSteelOrder.projectName,
+            title: `🔩 أمر تصنيع جديد لقسم الحديد: ${newSteelOrder.projectName}`,
+            message: `أمر تصنيع جديد وارد من الإنتاج: ${newSteelOrder.projectName} (${newSteelOrder.reference})`,
+            fromUser: 'Tasks & Production'
+          })
+        } else if (dept === 'قسم الهنجر') {
+          const newHangarOrder = {
+            id: `HNG-${Date.now().toString().slice(-4)}`,
+            reference: order.project_ref || `REF-${Date.now().toString().slice(-4)}`,
+            projectName: order.project_name || order.item_description || 'مشروع هنجر',
+            customerName: order.customer_name || order.company,
+            receiptDate: order.received_date || new Date().toISOString().split('T')[0],
+            deliveryDate: order.deadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+            hangarType: 'new_project' as const,
+            quantity: order.quantity || 1,
+            blueprintName: order.schematics || 'Warehouse_Hangar_Frame_Details.pdf',
+            notes: order.instructions || '',
+            status: 'pending' as const,
+            updatedAt: new Date().toISOString()
+          }
+          const existing = JSON.parse(localStorage.getItem('almasar_dept_orders_hangar') || '[]')
+          localStorage.setItem('almasar_dept_orders_hangar', JSON.stringify([newHangarOrder, ...existing]))
+          addNotification({
+            type: 'new_manufacturing_order',
+            department: 'hangar',
+            targetSections: ['hangar', 'tasks_production'],
+            targetSection: 'hangar',
+            projectRef: newHangarOrder.reference,
+            projectName: newHangarOrder.projectName,
+            title: `🏭 أمر تصنيع جديد لقسم الهنجر: ${newHangarOrder.projectName}`,
+            message: `أمر تصنيع جديد وارد من الإنتاج: ${newHangarOrder.projectName} (${newHangarOrder.reference})`,
+            fromUser: 'Tasks & Production'
+          })
+        } else if (dept === 'قسم الكهرباء والتجميع') {
+          const newElecOrder = {
+            id: `ELE-${Date.now().toString().slice(-4)}`,
+            reference: order.project_ref || `REF-${Date.now().toString().slice(-4)}`,
+            projectName: order.project_name || order.item_description || 'لوحات كهرباء وتجميع',
+            customerName: order.customer_name || order.company,
+            receiptDate: order.received_date || new Date().toISOString().split('T')[0],
+            deliveryDate: order.deadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+            blueprintName: order.schematics || 'SLD_Wiring_Approved.pdf',
+            notes: order.instructions || '',
+            status: 'pending' as const,
+            updatedAt: new Date().toISOString()
+          }
+          const existing = JSON.parse(localStorage.getItem('almasar_dept_orders_electrical') || '[]')
+          localStorage.setItem('almasar_dept_orders_electrical', JSON.stringify([newElecOrder, ...existing]))
+          addNotification({
+            type: 'new_manufacturing_order',
+            department: 'electrical',
+            targetSections: ['electrical', 'tasks_production'],
+            targetSection: 'electrical',
+            projectRef: newElecOrder.reference,
+            projectName: newElecOrder.projectName,
+            title: `⚡ أمر تصنيع جديد لقسم الكهرباء والتجميع: ${newElecOrder.projectName}`,
+            message: `أمر تصنيع جديد وارد من الإنتاج: ${newElecOrder.projectName} (${newElecOrder.reference})`,
+            fromUser: 'Tasks & Production'
+          })
+        }
       }
 
       const updated = designIncomingOrders.map(o => o.id === order.id ? { ...o, dispatched_to: dept } : o)

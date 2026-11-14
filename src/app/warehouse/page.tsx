@@ -3,10 +3,19 @@ import { useEffect, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { useLanguage } from '@/context/LanguageContext'
 import { formatDate, formatCurrency } from '@/lib/constants'
+import {
+  addNotification,
+  getNotifications,
+  resolveShortage,
+  markNotificationRead,
+  AppNotification
+} from '@/lib/notifications'
+
+type WarehouseTab = 'catalogue' | 'ledger' | 'pos' | 'shortages'
 
 export default function WarehousePage() {
   const { lang, isRtl } = useLanguage()
-  const [activeTab, setActiveTab] = useState<'catalogue' | 'ledger'>('catalogue')
+  const [activeTab, setActiveTab] = useState<WarehouseTab>('catalogue')
   const [items, setItems] = useState<any[]>([])
   const [ledger, setLedger] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -14,6 +23,17 @@ export default function WarehousePage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
+
+  // Incoming P.O.s and Shortages notifications
+  const [incomingPOs, setIncomingPOs] = useState<AppNotification[]>([])
+  const [projectShortages, setProjectShortages] = useState<AppNotification[]>([])
+
+  // Shortage response modal
+  const [respondingPO, setRespondingPO] = useState<AppNotification | null>(null)
+  const [shortageType, setShortageType] = useState<'shortage' | 'partial'>('shortage')
+  const [shortageMaterialName, setShortageMaterialName] = useState('')
+  const [shortageQuantityNeeded, setShortageQuantityNeeded] = useState('')
+  const [shortageNotes, setShortageNotes] = useState('')
 
   // Modals
   const [showItemModal, setShowItemModal] = useState(false)
@@ -68,6 +88,228 @@ export default function WarehousePage() {
       }
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  useEffect(() => {
+    loadNotificationsData()
+    const handleNotifUpdate = () => loadNotificationsData()
+    window.addEventListener('almasar_notification', handleNotifUpdate)
+    window.addEventListener('almasar_notification_update', handleNotifUpdate)
+    return () => {
+      window.removeEventListener('almasar_notification', handleNotifUpdate)
+      window.removeEventListener('almasar_notification_update', handleNotifUpdate)
+    }
+  }, [])
+
+  function loadNotificationsData() {
+    try {
+      const all = getNotifications()
+      // Incoming POs
+      const pos = all.filter(n => n.type === 'po_to_warehouse')
+      if (pos.length === 0) {
+        const defaultPOs: AppNotification[] = [
+          {
+            id: 'po-mock-1',
+            type: 'po_to_warehouse',
+            targetSections: ['warehouse'],
+            title: isRtl ? 'أمر شراء وارد: مشروع لوحات توزيع رئيسية 2500A MDB' : 'New P.O: 2500A MDB Distribution Panels',
+            message: isRtl ? 'أمر شراء ومواصفات عميل واردة من المبيعات للتحقق من توفر النحاس والقواطع.' : 'P.O received from Sales for material check.',
+            projectRef: 'REF-2026-0042',
+            projectName: 'مشروع لوحات توزيع رئيسية 2500A MDB',
+            project_name: 'مشروع لوحات توزيع رئيسية 2500A MDB',
+            reference: 'REF-2026-0042',
+            fromUser: 'Sales / CRM',
+            createdAt: '2026-11-04T09:30:00Z',
+            read: false,
+            status: 'pending'
+          },
+          {
+            id: 'po-mock-2',
+            type: 'po_to_warehouse',
+            targetSections: ['warehouse'],
+            title: isRtl ? 'أمر شراء وارد: هياكل حديد وأبواب خارجية IP65' : 'New P.O: Outdoor IP65 Enclosures',
+            message: isRtl ? 'أمر شراء وارد من المبيعات لاعتماد فحص صاج مجلفن ودهان إيبوكسي.' : 'P.O received from Sales for sheet metal & powder check.',
+            projectRef: 'REF-2026-0048',
+            projectName: 'هياكل حديد وأبواب خارجية IP65',
+            project_name: 'هياكل حديد وأبواب خارجية IP65',
+            reference: 'REF-2026-0048',
+            fromUser: 'Sales / CRM',
+            createdAt: '2026-11-05T14:15:00Z',
+            read: false,
+            status: 'pending'
+          }
+        ]
+        setIncomingPOs(defaultPOs)
+      } else {
+        setIncomingPOs(pos)
+      }
+
+      // Shortages
+      const shortages = all.filter(n => n.type === 'project_shortage')
+      if (shortages.length === 0) {
+        const defaultShortage: AppNotification[] = [
+          {
+            id: 'sh-mock-1',
+            type: 'project_shortage',
+            department: 'electrical',
+            material_name: 'نحاس إلكتروليتي 100x10 ملم',
+            quantity: 40,
+            project_name: 'مشروع لوحات توزيع رئيسية 2500A MDB',
+            reference: 'REF-2026-0042',
+            projectName: 'مشروع لوحات توزيع رئيسية 2500A MDB',
+            projectRef: 'REF-2026-0042',
+            title: '⚠️ إبلاغ عن نقص مواد: نحاس إلكتروليتي 100x10 ملم',
+            message: 'تم تسجيل نقص في مواد المشروع لوحات توزيع رئيسية 2500A MDB [REF-2026-0042] - الكمية: 40 متر',
+            targetSections: ['procurement', 'sales', 'tasks_production', 'general_manager', 'warehouse'],
+            fromUser: 'باسل خريس - قسم الكهرباء',
+            status: 'pending',
+            createdAt: '2026-11-06T10:00:00Z',
+            read: false
+          }
+        ]
+        setProjectShortages(defaultShortage)
+      } else {
+        setProjectShortages(shortages)
+      }
+    } catch (e) {
+      console.error('Failed to load warehouse notifications:', e)
+    }
+  }
+
+  function handleMarkPOAvailable(po: AppNotification) {
+    try {
+      addNotification({
+        type: 'warehouse_to_sales',
+        targetSections: ['sales'],
+        title: isRtl ? `✅ المواد متوفرة: ${po.projectName || po.project_name}` : `Materials Available: ${po.projectName || po.project_name}`,
+        message: isRtl
+          ? `تم فحص وتأكيد توفر كافة المواد في المستودع للمشروع (${po.projectRef || po.reference}). يمكن لقسم المبيعات إرسال المشروع للتصميم الآن.`
+          : `Warehouse confirmed all materials are available for ${po.projectName || po.project_name} (${po.projectRef || po.reference}). Ready for Design.`,
+        projectRef: po.projectRef || po.reference,
+        projectName: po.projectName || po.project_name,
+        reference: po.projectRef || po.reference,
+        project_name: po.projectName || po.project_name,
+        status: 'available',
+        fromUser: 'Warehouse / جهاد'
+      })
+
+      markNotificationRead(po.id)
+      setIncomingPOs(prev => prev.map(p => p.id === po.id ? { ...p, status: 'available', read: true } : p))
+      alert(isRtl ? `✅ تم تأكيد توفر المواد وإشعار قسم المبيعات بنجاح لمشروع (${po.projectName || po.project_name})!` : `Materials confirmed available and Sales notified successfully!`)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  function openShortageModalForPO(po: AppNotification, type: 'shortage' | 'partial') {
+    setRespondingPO(po)
+    setShortageType(type)
+    setShortageMaterialName('')
+    setShortageQuantityNeeded('')
+    setShortageNotes('')
+  }
+
+  function handleSubmitShortageResponse(e: React.FormEvent) {
+    e.preventDefault()
+    if (!respondingPO) return
+
+    try {
+      if (shortageType === 'shortage') {
+        addNotification({
+          type: 'materials_shortage',
+          targetSections: ['procurement', 'sales'],
+          title: isRtl ? `❌ المواد غير متوفرة: ${respondingPO.projectName || respondingPO.project_name}` : `Materials Unavailable: ${respondingPO.projectName}`,
+          message: isRtl
+            ? `أفاد المستودع بعدم توفر المواد للمشروع (${respondingPO.projectRef || respondingPO.reference}). النقص: ${shortageMaterialName} (الكمية: ${shortageQuantityNeeded}). تم تحويل الطلب لقسم المشتريات.`
+            : `Warehouse reported materials unavailable for ${respondingPO.projectName}. Missing: ${shortageMaterialName} (Qty: ${shortageQuantityNeeded}). Dispatched to Procurement.`,
+          projectRef: respondingPO.projectRef || respondingPO.reference,
+          projectName: respondingPO.projectName || respondingPO.project_name,
+          reference: respondingPO.projectRef || respondingPO.reference,
+          project_name: respondingPO.projectName || respondingPO.project_name,
+          material_name: shortageMaterialName,
+          quantity: parseFloat(shortageQuantityNeeded) || undefined,
+          status: 'shortage',
+          fromUser: 'Warehouse / جهاد'
+        })
+      } else {
+        addNotification({
+          type: 'materials_shortage',
+          targetSections: ['procurement', 'sales'],
+          title: isRtl ? `🟡 المواد متوفرة جزئياً: ${respondingPO.projectName || respondingPO.project_name}` : `Partially Available: ${respondingPO.projectName}`,
+          message: isRtl
+            ? `أفاد المستودع بتوفر المواد جزئياً للمشروع (${respondingPO.projectRef || respondingPO.reference}). النقص: ${shortageMaterialName} (الكمية المطلوبة: ${shortageQuantityNeeded}). الملاحظات: ${shortageNotes}`
+            : `Warehouse reported materials partially available for ${respondingPO.projectName}. Missing: ${shortageMaterialName} (Qty: ${shortageQuantityNeeded}).`,
+          projectRef: respondingPO.projectRef || respondingPO.reference,
+          projectName: respondingPO.projectName || respondingPO.project_name,
+          reference: respondingPO.projectRef || respondingPO.reference,
+          project_name: respondingPO.projectName || respondingPO.project_name,
+          material_name: shortageMaterialName,
+          quantity: parseFloat(shortageQuantityNeeded) || undefined,
+          status: 'partial',
+          fromUser: 'Warehouse / جهاد'
+        })
+      }
+
+      markNotificationRead(respondingPO.id)
+      setIncomingPOs(prev => prev.map(p => p.id === respondingPO.id ? { ...p, status: shortageType, read: true } : p))
+      setRespondingPO(null)
+      alert(isRtl ? `تم تسجيل النقص وإرسال البلاغ لقسم المشتريات والمبيعات بنجاح!` : `Shortage recorded and dispatched to Procurement & Sales successfully!`)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  function handleConfirmMaterialArrival(sh: AppNotification) {
+    try {
+      resolveShortage(sh.id)
+
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('almasar_dept_orders_electrical')
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw)
+            const updatedOrders = parsed.map((ord: any) => {
+              if (
+                ord.reference === sh.reference ||
+                ord.reference === sh.projectRef ||
+                ord.projectName === sh.project_name ||
+                ord.projectName === sh.projectName
+              ) {
+                return {
+                  ...ord,
+                  shortageDetails: ord.shortageDetails ? { ...ord.shortageDetails, status: 'arrived' } : { materialName: sh.material_name, quantity: sh.quantity, reportedAt: new Date().toISOString(), status: 'arrived' }
+                }
+              }
+              return ord
+            })
+            localStorage.setItem('almasar_dept_orders_electrical', JSON.stringify(updatedOrders))
+          } catch (e) {
+            console.error(e)
+          }
+        }
+      }
+
+      addNotification({
+        type: 'shortage_arrived',
+        targetSections: ['electrical', 'procurement', 'sales', 'tasks_production', 'general_manager'],
+        title: isRtl ? `✅ وصلت المواد للمستودع: ${sh.material_name || 'مواد المشروع'}` : `Materials Arrived at Warehouse`,
+        message: isRtl
+          ? `تم استلام وتأكيد وصول المواد للمستودع لمشروع (${sh.project_name || sh.projectName || sh.reference}): ${sh.material_name || ''}. جاهزة للصرف للمشروع.`
+          : `Warehouse confirmed arrival of materials for (${sh.project_name || sh.projectName}): ${sh.material_name || ''}. Ready for assembly.`,
+        projectRef: sh.projectRef || sh.reference,
+        projectName: sh.projectName || sh.project_name,
+        reference: sh.reference || sh.projectRef,
+        project_name: sh.project_name || sh.projectName,
+        material_name: sh.material_name,
+        status: 'arrived',
+        fromUser: 'Warehouse / جهاد'
+      })
+
+      setProjectShortages(prev => prev.map(s => s.id === sh.id ? { ...s, status: 'arrived', read: true } : s))
+      alert(isRtl ? `✅ تم تأكيد وصول واستلام المواد بالمستودع وإشعار قسم الكهرباء والمشتريات والإدارة!` : `Materials arrival confirmed and notified!`)
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -309,7 +551,7 @@ export default function WarehousePage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button
           className={`btn btn-sm ${activeTab === 'catalogue' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('catalogue')}
@@ -321,6 +563,46 @@ export default function WarehousePage() {
           onClick={() => setActiveTab('ledger')}
         >
           📜 {isRtl ? 'سجل حركات المخزون وصرف المواد' : 'Stock Movement & Audit Ledger'}
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'pos' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('pos')}
+          style={{ position: 'relative' }}
+        >
+          📥 {isRtl ? 'أوامر الشراء الواردة من المبيعات (P.O)' : 'Incoming P.O.s from Sales'}
+          {incomingPOs.filter(p => !p.status || p.status === 'pending').length > 0 && (
+            <span style={{
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: 10,
+              marginInlineStart: 6
+            }}>
+              {incomingPOs.filter(p => !p.status || p.status === 'pending').length}
+            </span>
+          )}
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'shortages' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('shortages')}
+          style={{ position: 'relative' }}
+        >
+          ⚠️ {isRtl ? 'نواقص المشاريع ومواد الكهرباء' : 'Project Material Shortages'}
+          {projectShortages.filter(s => s.status !== 'arrived').length > 0 && (
+            <span style={{
+              background: '#f59e0b',
+              color: '#000',
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: 10,
+              marginInlineStart: 6
+            }}>
+              {projectShortages.filter(s => s.status !== 'arrived').length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -472,6 +754,322 @@ export default function WarehousePage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: Incoming P.O.s from Sales */}
+      {activeTab === 'pos' && (
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+              📥 {isRtl ? 'أوامر الشراء الواردة من قسم المبيعات (P.O) للتحقق من توفر المواد' : 'Incoming P.O.s from Sales for Material Availability Check'}
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+              {isRtl
+                ? 'يتم فحص توفر المواد الأولية والمكونات لكل مشروع وإشعار المبيعات بالنتيجة. في حال توفر المواد تتاح للمبيعات إمكانية إرسال المشروع للتصميم، وفي حال النقص يتم تحويل الطلب للمشتريات.'
+                : 'Inspect raw materials & components for each incoming P.O. Confirm availability to allow Sales to dispatch to Design, or report shortages to Procurement.'}
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gap: 16 }}>
+            {incomingPOs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                {isRtl ? 'لا توجد أوامر شراء واردة حالياً' : 'No incoming P.O.s at this time'}
+              </div>
+            ) : (
+              incomingPOs.map(po => {
+                const isAvail = po.status === 'available'
+                const isShort = po.status === 'shortage'
+                const isPart = po.status === 'partial'
+
+                return (
+                  <div
+                    key={po.id}
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      padding: 20,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 14
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)', fontFamily: 'monospace' }}>
+                            {po.projectRef || po.reference}
+                          </span>
+                          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {po.projectName || po.project_name}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                          {po.message}
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
+                        {isAvail ? (
+                          <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid #10b98155', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                            ✅ {isRtl ? 'المواد متوفرة (تم إشعار المبيعات)' : 'Materials Available (Sales Notified)'}
+                          </span>
+                        ) : isShort ? (
+                          <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid #ef444455', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                            ❌ {isRtl ? 'المواد غير متوفرة (تم إشعار المشتريات والمبيعات)' : 'Unavailable (Procurement Notified)'}
+                          </span>
+                        ) : isPart ? (
+                          <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid #f59e0b55', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                            🟡 {isRtl ? 'المواد متوفرة جزئياً' : 'Partially Available'}
+                          </span>
+                        ) : (
+                          <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #38bdf855', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                            ⏳ {isRtl ? 'بانتظار فحص المستودع' : 'Pending Warehouse Check'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-base)', padding: '8px 12px', borderRadius: 6 }}>
+                      <span>👤 {isRtl ? 'المصدر:' : 'From:'} {po.fromUser || 'المبيعات'}</span>
+                      <span>📅 {isRtl ? 'تاريخ الورود:' : 'Date:'} {formatDate(po.createdAt)}</span>
+                      {po.material_name && <span>⚠️ {isRtl ? 'النقص المسجل:' : 'Reported Shortage:'} {po.material_name} ({po.quantity || '-'})</span>}
+                    </div>
+
+                    {/* 3 Action Buttons */}
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                        {isRtl ? 'إجراء فحص توفر المواد:' : 'Material Verification Action:'}
+                      </span>
+                      
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          background: isAvail ? '#10b981' : 'rgba(16, 185, 129, 0.15)',
+                          color: isAvail ? '#ffffff' : '#10b981',
+                          border: '1px solid #10b981',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handleMarkPOAvailable(po)}
+                      >
+                        ✅ {isRtl ? 'المواد متوفرة' : 'Materials Available'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          background: isShort ? '#ef4444' : 'rgba(239, 68, 68, 0.15)',
+                          color: isShort ? '#ffffff' : '#ef4444',
+                          border: '1px solid #ef4444',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => openShortageModalForPO(po, 'shortage')}
+                      >
+                        ❌ {isRtl ? 'المواد غير متوفرة' : 'Materials Not Available'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          background: isPart ? '#f59e0b' : 'rgba(245, 158, 11, 0.15)',
+                          color: isPart ? '#000000' : '#f59e0b',
+                          border: '1px solid #f59e0b',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => openShortageModalForPO(po, 'partial')}
+                      >
+                        🟡 {isRtl ? 'متوفرة جزئياً' : 'Partially Available'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: Project Material Shortages */}
+      {activeTab === 'shortages' && (
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+              ⚠️ {isRtl ? 'إدارة نواقص المشاريع ومواد الكهرباء والتصنيع' : 'Project Material Shortages & Receipt Confirmation'}
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+              {isRtl
+                ? 'بلاغات نقص المواد الواردة من خطوط الإنتاج (مثل فنيي قسم الكهرباء والتجميع). عند وصول البضاعة للمستودع اضغط "تأكيد وصول المواد" ليتم إشعار القسم الفني والمشتريات وتحويل الحالة إلى (وصلت المواد).'
+                : 'Material shortages reported by production technicians. When received at the warehouse, click "Confirm Arrival" to update the technical teams.'}
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gap: 14 }}>
+            {projectShortages.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                {isRtl ? 'لا توجد بلاغات نقص مواد مسجلة حالياً' : 'No shortages reported currently'}
+              </div>
+            ) : (
+              projectShortages.map(sh => {
+                const isArrived = sh.status === 'arrived'
+
+                return (
+                  <div
+                    key={sh.id}
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: isArrived ? '1px solid #10b98155' : '1px solid #f59e0b55',
+                      borderRadius: 10,
+                      padding: 18,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 14
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          ⚠️ {sh.material_name || sh.title}
+                        </span>
+                        {sh.quantity && (
+                          <span style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
+                            {isRtl ? 'الكمية:' : 'Qty:'} {sh.quantity}
+                          </span>
+                        )}
+                        {isArrived ? (
+                          <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid #10b98155', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                            ✅ {isRtl ? 'وصلت المواد للمستودع' : 'Materials Arrived'}
+                          </span>
+                        ) : (
+                          <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid #f59e0b55', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                            ⏳ {isRtl ? 'نقص بانتظار التوريد' : 'Pending Arrival'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        <strong>{isRtl ? 'المشروع:' : 'Project:'}</strong> {sh.project_name || sh.projectName || '-'} [{sh.reference || sh.projectRef || '-'}]
+                      </div>
+
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                        <span>👷 {isRtl ? 'المبلغ:' : 'Reported By:'} {sh.fromUser || 'فني الإنتاج'}</span>
+                        <span>📅 {isRtl ? 'التاريخ:' : 'Date:'} {formatDate(sh.createdAt)}</span>
+                        {sh.message && <span>📝 {sh.message}</span>}
+                      </div>
+                    </div>
+
+                    <div>
+                      {!isArrived ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700 }}
+                          onClick={() => handleConfirmMaterialArrival(sh)}
+                        >
+                          📦 {isRtl ? 'تأكيد وصول واستلام المواد للمستودع' : 'Confirm Materials Arrived'}
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: 13, color: '#10b981', fontWeight: 700 }}>
+                          ✓ {isRtl ? 'تم الاستلام وإشعار القسم الفني' : 'Received & Notified'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal for reporting shortage / partial availability back to sales and procurement */}
+      {respondingPO && (
+        <div className="modal-backdrop" onClick={() => setRespondingPO(null)}>
+          <div className="modal-content" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleSubmitShortageResponse}>
+              <div className="modal-header">
+                <h3>
+                  {shortageType === 'shortage'
+                    ? (isRtl ? '❌ تسجيل عدم توفر مواد وإشعار المشتريات والمبيعات' : 'Material Unavailable Report')
+                    : (isRtl ? '🟡 تسجيل توفر جزئي وتحديد النقص المطلوب' : 'Partial Availability Report')}
+                </h3>
+                <button type="button" className="btn btn-secondary" onClick={() => setRespondingPO(null)}>✕</button>
+              </div>
+
+              <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+                <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', padding: 12, borderRadius: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
+                    {respondingPO.projectRef || respondingPO.reference} — {respondingPO.projectName || respondingPO.project_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {respondingPO.message}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? 'اسم المادة أو الصنف الناقص *' : 'Missing Material / Item Name *'}</label>
+                  <input
+                    required
+                    type="text"
+                    className="input"
+                    placeholder={isRtl ? 'مثال: بسبار نحاس 100x10 ملم / قواطع 250A' : 'e.g. Copper Busbar 100x10mm'}
+                    value={shortageMaterialName}
+                    onChange={e => setShortageMaterialName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? 'الكمية المطلوبة للشراء والتوريد *' : 'Quantity Needed *'}</label>
+                  <input
+                    required
+                    type="text"
+                    className="input"
+                    placeholder={isRtl ? 'مثال: 40 متر / 6 حبات' : 'e.g. 40 meters / 6 pcs'}
+                    value={shortageQuantityNeeded}
+                    onChange={e => setShortageQuantityNeeded(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="label">{isRtl ? 'ملاحظات وتوجيهات للمشتريات والمبيعات' : 'Notes for Procurement & Sales'}</label>
+                  <textarea
+                    className="input"
+                    rows={3}
+                    placeholder={isRtl ? 'ملاحظات حول المورد المقترح أو مواصفات المادة أو المواد المتوفرة حالياً...' : 'Notes on specs or alternatives...'}
+                    value={shortageNotes}
+                    onChange={e => setShortageNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setRespondingPO(null)}>
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    background: shortageType === 'shortage' ? '#ef4444' : '#f59e0b',
+                    borderColor: shortageType === 'shortage' ? '#ef4444' : '#f59e0b',
+                    color: shortageType === 'shortage' ? '#fff' : '#000',
+                    fontWeight: 700
+                  }}
+                >
+                  🚀 {isRtl ? 'إرسال البلاغ لقسم المشتريات والمبيعات' : 'Send Shortage to Procurement & Sales'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

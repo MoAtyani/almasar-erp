@@ -148,6 +148,7 @@ export default function ElectricalDepartmentPage() {
 
     const handleNotifUpdate = () => {
       loadNotifications()
+      loadOrders()
     }
     window.addEventListener('almasar_notification', handleNotifUpdate)
     window.addEventListener('almasar_notification_update', handleNotifUpdate)
@@ -320,7 +321,7 @@ Al-Masar Engineering Industries - Electrical & Assembly Dept.
         projectRef: shortageForm.refNumber,
         title: `⚠️ إبلاغ عن نقص مواد: ${shortageForm.materialName}`,
         message: `تم تسجيل نقص في مواد المشروع ${shortageForm.projectName} [${shortageForm.refNumber}] - الكمية: ${shortageForm.quantity}`,
-        targetSections: ['procurement', 'sales', 'tasks_production', 'general_manager'],
+        targetSections: ['procurement', 'sales', 'tasks_production', 'general_manager', 'warehouse'],
         targetSection: 'procurement',
         fromUser: user?.nameAr || user?.name || 'باسل خريس',
         status: 'pending' as const,

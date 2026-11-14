@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { formatDate, formatCurrency } from '@/lib/constants'
 import { useLanguage } from '@/context/LanguageContext'
+import { addNotification } from '@/lib/notifications'
 
 interface DesignProject {
   id: string
@@ -218,7 +219,7 @@ export default function EngineeringPage() {
   function openProductionModal(p: DesignProject) {
     setSelectedProjectForProd(p)
     setProdForm({
-      target_department: p.product_category === 'iron' ? 'قسم الحديد' : p.product_category === 'hangar' ? 'قسم الهنجر' : 'قسم الكهرباء والتجميع',
+      target_department: 'إدارة الإنتاج والمهام',
       quantity: 1,
       schematics_attachment: p.client_files || 'مخططات_التصميم_المعتمدة.pdf',
       manufacturing_instructions: `أمر تصنيع وتشغيل صادر من التصميم لمشروع ${p.name} (${p.project_ref})`
@@ -237,7 +238,7 @@ export default function EngineeringPage() {
       project_name: selectedProjectForProd.name,
       customer_name: selectedProjectForProd.customer_name,
       company: selectedProjectForProd.company,
-      department: prodForm.target_department,
+      department: 'إدارة الإنتاج والمهام',
       quantity: prodForm.quantity,
       schematics: prodForm.schematics_attachment,
       instructions: prodForm.manufacturing_instructions,
@@ -252,6 +253,22 @@ export default function EngineeringPage() {
       localStorage.setItem('almasar_production_from_design', JSON.stringify([productionOrder, ...existing]))
     }
 
+    addNotification({
+      type: 'new_manufacturing_order',
+      targetSections: ['tasks_production'],
+      targetSection: 'tasks_production',
+      title: isRtl ? `🚀 أمر تصنيع جديد من التصميم: ${selectedProjectForProd.name}` : `New Manufacturing Order: ${selectedProjectForProd.name}`,
+      message: isRtl
+        ? `أصدر قسم التصميم أمر تصنيع جديد (${prodOrderId}) لمشروع ${selectedProjectForProd.name} (${selectedProjectForProd.project_ref}). يرجى توجيه الأمر للقسم المختص لبدء التصنيع.`
+        : `Engineering issued manufacturing order (${prodOrderId}) for ${selectedProjectForProd.name}. Please dispatch to appropriate department.`,
+      projectRef: selectedProjectForProd.project_ref,
+      projectName: selectedProjectForProd.name,
+      reference: selectedProjectForProd.project_ref,
+      project_name: selectedProjectForProd.name,
+      fromUser: 'Engineering / قسم التصميم',
+      status: 'pending'
+    })
+
     const updated = designProjects.map(p => p.id === selectedProjectForProd.id ? {
       ...p,
       status: 'sent_to_production',
@@ -264,7 +281,7 @@ export default function EngineeringPage() {
     }
 
     setSelectedProjectForProd(null)
-    alert(isRtl ? `تم إرسال أمر التصنيع الجديد (${prodOrderId}) بنجاح إلى قسم الإنتاج والمهام مع كافة ملفات المخططات!` : `New manufacturing order (${prodOrderId}) sent to Production successfully!`)
+    alert(isRtl ? `تم إرسال أمر التصنيع الجديد (${prodOrderId}) بنجاح إلى قسم الإنتاج والمهام مع كافة ملفات المخططات والتفاصيل الهندسية!` : `New manufacturing order (${prodOrderId}) sent to Production successfully!`)
   }
 
   const filteredProjects = designProjects.filter(p =>
@@ -647,19 +664,28 @@ export default function EngineeringPage() {
                   </div>
                 </div>
 
+                <div style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+                    {isRtl ? 'جهة التوجيه المعتمدة:' : 'Routing Destination:'}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    🏭 {isRtl ? 'إدارة الإنتاج والمهام المركزية (يتم توجيه الأمر للأقسام من الإنتاج)' : 'Central Production & Tasks Management (Routed to departments by Production)'}
+                  </div>
+                </div>
+
                 <div>
-                  <label className="label">{isRtl ? 'القسم الإنتاجي المستهدف *' : 'Target Production Department *'}</label>
-                  <select
+                  <label className="label">{isRtl ? 'رفع المخططات الهندسية والتفاصيل الفنية المعتمدة *' : 'Upload Approved Blueprints & Technical Details *'}</label>
+                  <input
+                    required
+                    type="text"
                     className="input"
-                    value={prodForm.target_department}
-                    onChange={e => setProdForm({ ...prodForm, target_department: e.target.value })}
-                  >
-                    <option value="قسم الكهرباء والتجميع">{isRtl ? 'قسم الكهرباء والتجميع' : 'Electrical & Assembly'}</option>
-                    <option value="قسم الحديد">{isRtl ? 'قسم الحديد' : 'Iron Department'}</option>
-                    <option value="قسم الهنجر">{isRtl ? 'قسم الهنجر' : 'Hangar Department'}</option>
-                    <option value="قسم الدهان">{isRtl ? 'قسم الدهان' : 'Painting Department'}</option>
-                    <option value="قسم الفحص والجودة">{isRtl ? 'قسم الفحص والجودة' : 'Quality Control (QC)'}</option>
-                  </select>
+                    placeholder="SLD_MDB_Wiring_Rev3.pdf / AutoCAD_Assembly_Drawings.dwg"
+                    value={prodForm.schematics_attachment}
+                    onChange={e => setProdForm({ ...prodForm, schematics_attachment: e.target.value })}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {isRtl ? 'الملفات المرفوعة ستكون متاحة فوراً للتحميل والمعاينة على أجهزة iPad لفرق الصالات والتصنيع.' : 'Files will be immediately downloadable on shop-floor iPad pages.'}
+                  </div>
                 </div>
 
                 <div>

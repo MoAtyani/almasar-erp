@@ -118,6 +118,7 @@ export default function SteelDepartmentPage() {
     // Listen to notification events
     const handleNotifUpdate = () => {
       loadNotifications()
+      loadOrders()
     }
     window.addEventListener('almasar_notification', handleNotifUpdate)
     window.addEventListener('almasar_notification_update', handleNotifUpdate)

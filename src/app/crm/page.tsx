@@ -290,6 +290,67 @@ export default function CRMPage() {
     }
   }
 
+  function isLeadSentToDesign(lead: any): boolean {
+    if (typeof window === 'undefined') return false
+    try {
+      const sentMap = JSON.parse(localStorage.getItem('almasar_leads_sent_to_design') || '{}')
+      return !!sentMap[lead.id]
+    } catch {
+      return false
+    }
+  }
+
+  function handleSendLeadToDesign(lead: any) {
+    try {
+      const designIncoming = {
+        id: `des-${Date.now()}`,
+        sales_lead_id: lead.id,
+        project_ref: lead.reference,
+        name: lead.name,
+        customer_name: lead.customer_name,
+        company: lead.company,
+        product_category: lead.product_category || 'electrical',
+        expected_revenue: lead.expected_revenue,
+        payment_method: lead.payment_method || 'cash',
+        invoice_name: lead.invoice_name || '',
+        client_files: lead.files || 'ملفات ومواصفات العميل المعتمدة.pdf',
+        received_date: new Date().toISOString().split('T')[0],
+        delivery_date: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        status: 'received_from_sales'
+      }
+
+      if (typeof window !== 'undefined') {
+        const stored = JSON.parse(localStorage.getItem('almasar_design_projects') || '[]')
+        localStorage.setItem('almasar_design_projects', JSON.stringify([designIncoming, ...stored.filter((p: any) => p.sales_lead_id !== lead.id)]))
+        
+        const sentMap = JSON.parse(localStorage.getItem('almasar_leads_sent_to_design') || '{}')
+        sentMap[lead.id] = true
+        localStorage.setItem('almasar_leads_sent_to_design', JSON.stringify(sentMap))
+      }
+
+      addNotification({
+        type: 'new_external_project',
+        targetSections: ['engineering'],
+        targetSection: 'engineering',
+        title: isRtl ? `📐 مشروع جديد للتصميم: ${lead.name}` : `New Project for Design: ${lead.name}`,
+        message: isRtl
+          ? `أرسلت المبيعات حزمة المشروع (${lead.reference}) إلى قسم التصميم والمخططات الهندسية بعد استيفاء مراجعة المستودع.`
+          : `Sales dispatched project (${lead.reference}) to Engineering Design after warehouse review.`,
+        projectRef: lead.reference,
+        projectName: lead.name,
+        reference: lead.reference,
+        project_name: lead.name,
+        fromUser: 'Sales / CRM',
+        status: 'pending'
+      })
+
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, sent_to_design: true } : l))
+      alert(isRtl ? `📐 تم إرسال حزمة المشروع (${lead.name}) بنجاح لقسم التصميم والمخططات الهندسية!` : `Project dispatched to Engineering Design successfully!`)
+    } catch (e) {
+      console.error('Error sending lead to design:', e)
+    }
+  }
+
   async function handleConfirmApprovalAndSendToDesign(e: React.FormEvent) {
     e.preventDefault()
     if (!approvalLead) return
@@ -307,29 +368,6 @@ export default function CRMPage() {
           outcome: 'won'
         })
       })
-
-      // Queue into design incoming projects (LocalStorage sync so Engineering immediately shows it under استقبال مشروع جديد)
-      const designIncoming = {
-        id: `des-${Date.now()}`,
-        sales_lead_id: approvalLead.id,
-        project_ref: approvalLead.reference,
-        name: approvalLead.name,
-        customer_name: approvalLead.customer_name,
-        company: approvalLead.company,
-        product_category: approvalLead.product_category,
-        expected_revenue: approvalLead.expected_revenue,
-        payment_method: approvalForm.payment_method,
-        invoice_name: approvalForm.invoice_name,
-        client_files: approvalForm.files_note || 'ملفات ومواصفات العميل المعتمدة.pdf',
-        received_date: new Date().toISOString().split('T')[0],
-        delivery_date: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0],
-        status: 'received_from_sales'
-      }
-
-      if (typeof window !== 'undefined') {
-        const stored = JSON.parse(localStorage.getItem('almasar_design_projects') || '[]')
-        localStorage.setItem('almasar_design_projects', JSON.stringify([designIncoming, ...stored.filter((p: any) => p.sales_lead_id !== approvalLead.id)]))
-      }
 
       // Dispatch P.O to Warehouse Notification
       addNotification({
@@ -975,6 +1013,48 @@ export default function CRMPage() {
                               </div>
                             )
                           })()}
+
+                          {lead.pricing_status === 'price_approved' && (
+                            <div style={{ marginTop: 4 }}>
+                              {isLeadSentToDesign(lead) ? (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '3px 8px',
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: 'rgba(139, 92, 246, 0.15)',
+                                    color: '#8b5cf6',
+                                    border: '1px solid #8b5cf655'
+                                  }}
+                                >
+                                  📐 {isRtl ? 'تم الإرسال للتصميم' : 'Sent to Design'}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-xs"
+                                  style={{
+                                    padding: '3px 8px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: '#8b5cf6',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: 4,
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => handleSendLeadToDesign(lead)}
+                                  title={isRtl ? 'إرسال حزمة المشروع والمرفقات للتصميم الهندسي' : 'Dispatch Project to Engineering Design'}
+                                >
+                                  📐 {isRtl ? 'إرسال للتصميم' : 'Send to Design'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td style={{ maxWidth: 280 }}>
