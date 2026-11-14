@@ -3,6 +3,12 @@ import { useEffect, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { useLanguage } from '@/context/LanguageContext'
 import { formatDate, formatCurrency } from '@/lib/constants'
+import {
+  AppNotification,
+  addNotification,
+  getNotificationsForSection,
+  markNotificationRead
+} from '@/lib/notifications'
 
 interface SalesLead {
   id: string
@@ -84,7 +90,7 @@ export default function CRMPage() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [selectedLead, setSelectedLead] = useState<SalesLead | null>(null)
 
-  // Pricing Approval & Send to Design Modal
+  // Pricing Approval & Send to Warehouse Modal
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [approvalLead, setApprovalLead] = useState<SalesLead | null>(null)
   const [approvalForm, setApprovalForm] = useState({
@@ -92,6 +98,15 @@ export default function CRMPage() {
     invoice_name: '',
     files_note: ''
   })
+
+  // Notifications from Warehouse & System
+  const [salesNotifications, setSalesNotifications] = useState<AppNotification[]>([])
+  const [showNotifsCollapse, setShowNotifsCollapse] = useState(true)
+
+  const loadSalesNotifications = () => {
+    const notifs = getNotificationsForSection('sales')
+    setSalesNotifications(notifs)
+  }
 
   // Form (+ تسعير مشروع جديد)
   const [form, setForm] = useState({
@@ -126,7 +141,38 @@ export default function CRMPage() {
   useEffect(() => {
     loadSales()
     loadTemplates()
+    loadSalesNotifications()
+
+    const handleUpdate = () => loadSalesNotifications()
+    window.addEventListener('almasar_notification', handleUpdate)
+    window.addEventListener('almasar_notification_update', handleUpdate)
+    return () => {
+      window.removeEventListener('almasar_notification', handleUpdate)
+      window.removeEventListener('almasar_notification_update', handleUpdate)
+    }
   }, [])
+
+  const getWarehouseStatusForProject = (ref?: string, name?: string) => {
+    if (!ref && !name) return null
+    const notif = salesNotifications.find(n =>
+      (n.type === 'warehouse_to_sales' || n.type === 'materials_available' || n.type === 'materials_shortage') &&
+      ((ref && (n.projectRef === ref || n.reference === ref)) || (name && (n.projectName === name || n.project_name === name)))
+    )
+    if (!notif) return null
+    if (notif.type === 'warehouse_to_sales' || notif.type === 'materials_available') {
+      if (notif.status === 'partial') {
+        return { label: isRtl ? 'المواد متوفرة جزئياً 🟡' : 'Partially Available 🟡', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', notif }
+      }
+      return { label: isRtl ? 'المواد متوفرة ✅' : 'Materials Available ✅', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', notif }
+    }
+    if (notif.type === 'materials_shortage') {
+      if (notif.status === 'partial') {
+        return { label: isRtl ? 'المواد متوفرة جزئياً 🟡' : 'Partially Available 🟡', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', notif }
+      }
+      return { label: isRtl ? 'نقص مواد ⚠️' : 'Shortage ⚠️', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', notif }
+    }
+    return null
+  }
 
   async function loadSales() {
     setLoading(true)
@@ -155,7 +201,7 @@ export default function CRMPage() {
     }
   }
 
-  async function handleCreateSalesOrder(e: React.FormEvent) {
+  async function handleCreateSalesOrder(e: React.FormEvent, sendToWarehouse: boolean = false) {
     e.preventDefault()
     try {
       const res = await fetch('/api/sales', {
@@ -163,14 +209,35 @@ export default function CRMPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create_sales_order',
-          ...form
+          ...form,
+          pricing_status: sendToWarehouse ? 'price_approved' : form.pricing_status
         })
       })
       const json = await res.json()
       if (json.success) {
+        if (sendToWarehouse) {
+          addNotification({
+            type: 'po_to_warehouse',
+            targetSections: ['warehouse'],
+            title: isRtl ? `أمر شراء جديد: ${form.name}` : `New P.O: ${form.name}`,
+            message: isRtl
+              ? `تم إنشاء أمر شراء P.O للمشروع (${form.reference || 'REF'}) وإرساله إلى المستودع للتحقق من توفر المواد`
+              : `P.O dispatched to Warehouse for material verification (${form.reference || 'REF'})`,
+            projectRef: form.reference,
+            projectName: form.name,
+            project_name: form.name,
+            reference: form.reference,
+            quantity: 1,
+            fromUser: 'Sales / CRM',
+            status: 'pending'
+          })
+        }
         setShowAddModal(false)
         resetForm()
         loadSales()
+        if (sendToWarehouse) {
+          alert(isRtl ? 'تم حفظ تسعير المشروع وإرسال أمر الشراء P.O إلى المستودع بنجاح!' : 'Quotation saved & P.O dispatched to Warehouse successfully!')
+        }
       } else {
         alert(json.error || 'Failed to create sales order')
       }
@@ -264,6 +331,23 @@ export default function CRMPage() {
         localStorage.setItem('almasar_design_projects', JSON.stringify([designIncoming, ...stored.filter((p: any) => p.sales_lead_id !== approvalLead.id)]))
       }
 
+      // Dispatch P.O to Warehouse Notification
+      addNotification({
+        type: 'po_to_warehouse',
+        targetSections: ['warehouse'],
+        title: isRtl ? `أمر شراء جديد: ${approvalLead.name}` : `New P.O: ${approvalLead.name}`,
+        message: isRtl
+          ? `تم إرسال أمر الشراء للمشروع (${approvalLead.reference}) إلى المستودع للتحقق من توفر المواد. الفاتورة: ${approvalForm.invoice_name || '-'}`
+          : `P.O dispatched to Warehouse for material verification (${approvalLead.reference}). Invoice: ${approvalForm.invoice_name || '-'}`,
+        projectRef: approvalLead.reference,
+        projectName: approvalLead.name,
+        project_name: approvalLead.name,
+        reference: approvalLead.reference,
+        quantity: 1,
+        fromUser: 'Sales / CRM',
+        status: 'pending'
+      })
+
       setLeads(prev => prev.map(l => l.id === approvalLead.id ? {
         ...l,
         pricing_status: 'price_approved',
@@ -273,9 +357,9 @@ export default function CRMPage() {
       } : l))
 
       setShowApprovalModal(false)
-      alert(isRtl ? 'تمت الموافقة على السعر وإرسال المشروع مباشرة إلى قسم التصميم بنجاح!' : 'Quotation approved and dispatched to Design department successfully!')
+      alert(isRtl ? 'تم حفظ أمر الشراء وإرساله مباشرة إلى المستودع للتحقق من توفر المواد بنجاح!' : 'P.O saved and dispatched to Warehouse successfully!')
     } catch (err) {
-      console.error('Error approving and sending to design:', err)
+      console.error('Error approving and sending to warehouse:', err)
     }
   }
 
@@ -454,6 +538,146 @@ export default function CRMPage() {
         </div>
       }
     >
+      {/* Notifications & Warehouse Status Panel */}
+      <div
+        className="card"
+        style={{
+          marginBottom: 20,
+          padding: '14px 18px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 12
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}
+          onClick={() => setShowNotifsCollapse(!showNotifsCollapse)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>🔔</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {isRtl ? 'إشعارات المبيعات وحالة توفر مواد المستودع' : 'Sales Notifications & Warehouse Material Status'}
+            </span>
+            {salesNotifications.filter(n => !n.read).length > 0 && (
+              <span
+                style={{
+                  background: '#ef4444',
+                  color: '#fff',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 10
+                }}
+              >
+                {salesNotifications.filter(n => !n.read).length} {isRtl ? 'جديد' : 'new'}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {showNotifsCollapse ? (isRtl ? 'طي' : 'Collapse') : (isRtl ? 'عرض' : 'Expand')}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {showNotifsCollapse ? '▲' : '▼'}
+            </span>
+          </div>
+        </div>
+
+        {showNotifsCollapse && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+            {salesNotifications.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
+                {isRtl ? 'لا توجد إشعارات واردة للمبيعات حالياً' : 'No incoming notifications for Sales'}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {salesNotifications.slice(0, 5).map(n => {
+                  const isAvailable = n.type === 'warehouse_to_sales' || n.type === 'materials_available'
+                  const isShortage = n.type === 'materials_shortage'
+                  const badgeColor = isAvailable ? '#10b981' : isShortage ? (n.status === 'partial' ? '#f59e0b' : '#ef4444') : '#38bdf8'
+                  const badgeText = isAvailable
+                    ? (isRtl ? 'المواد متوفرة في المستودع ✅' : 'Materials Available ✅')
+                    : isShortage
+                    ? (n.status === 'partial' ? (isRtl ? 'المواد متوفرة جزئياً 🟡' : 'Partially Available 🟡') : (isRtl ? 'نقص مواد في المستودع ⚠️' : 'Materials Shortage ⚠️'))
+                    : (isRtl ? 'إشعار' : 'Notice')
+
+                  return (
+                    <div
+                      key={n.id}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        background: 'var(--bg-elevated)',
+                        border: `1px solid ${n.read ? 'var(--border)' : badgeColor + '66'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        flexWrap: 'wrap'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 240, flex: 1 }}>
+                        <span style={{ fontSize: 18 }}>
+                          {isAvailable ? '✅' : isShortage ? '⚠️' : '📩'}
+                        </span>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                              {n.projectName || n.project_name || n.title || 'مشروع'}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: 6,
+                                background: badgeColor + '22',
+                                color: badgeColor,
+                                border: `1px solid ${badgeColor}44`
+                              }}
+                            >
+                              {badgeText}
+                            </span>
+                          </div>
+                          {n.message && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                              {n.message}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {new Date(n.createdAt).toLocaleDateString()}
+                        </span>
+                        {!n.read && (
+                          <button
+                            className="btn btn-xs btn-secondary"
+                            onClick={() => {
+                              markNotificationRead(n.id)
+                              loadSalesNotifications()
+                            }}
+                          >
+                            {isRtl ? 'تحديد كمقروء' : 'Mark Read'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Boxed Header / Mode Switcher */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 8, background: 'var(--bg-card)', padding: 6, borderRadius: 10, border: '1px solid var(--border)' }}>
@@ -699,9 +923,9 @@ export default function CRMPage() {
                                 fontWeight: 700
                               }}
                               onClick={() => handleUpdatePricingStatus(lead, 'price_approved')}
-                              title={isRtl ? 'موافقة على السعر وإرسال للتصميم' : 'Price Approved'}
+                              title={isRtl ? 'اعتماد أمر الشراء وإرسال للمستودع' : 'Approve & Send P.O to Warehouse'}
                             >
-                              ✓ {isRtl ? 'موافقة' : 'Approve'}
+                              ✓ {isRtl ? 'موافقة وإرسال P.O' : 'Approve & P.O'}
                             </button>
                             <button
                               type="button"
@@ -726,6 +950,31 @@ export default function CRMPage() {
                               {lead.invoice_name && <div>🧾 {lead.invoice_name}</div>}
                             </div>
                           )}
+
+                          {(() => {
+                            const whStatus = getWarehouseStatusForProject(lead.reference, lead.name)
+                            if (!whStatus) return null
+                            return (
+                              <div
+                                style={{
+                                  marginTop: 4,
+                                  padding: '3px 8px',
+                                  borderRadius: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  background: whStatus.bg,
+                                  color: whStatus.color,
+                                  border: `1px solid ${whStatus.color}44`,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                                title={whStatus.notif.message || ''}
+                              >
+                                <span>{whStatus.label}</span>
+                              </div>
+                            )
+                          })()}
                         </div>
                       </td>
                       <td style={{ maxWidth: 280 }}>
@@ -952,12 +1201,20 @@ export default function CRMPage() {
                 </div>
               </div>
 
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {isRtl ? 'حفظ تسعير المشروع' : 'Save Quotation'}
+                <button type="submit" className="btn btn-secondary">
+                  {isRtl ? 'حفظ مسودة التسعير' : 'Save Draft Quotation'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ background: '#0284c7', borderColor: '#0284c7', fontWeight: 700 }}
+                  onClick={(e) => handleCreateSalesOrder(e, true)}
+                >
+                  📦 {isRtl ? 'حفظ وإرسال P.O للمستودع' : 'Save & Send P.O to Warehouse'}
                 </button>
               </div>
             </form>
@@ -965,13 +1222,13 @@ export default function CRMPage() {
         </div>
       )}
 
-      {/* MODAL: موافقة على السعر وإرسال للتصميم */}
+      {/* MODAL: موافقة على السعر وإرسال للمستودع */}
       {showApprovalModal && approvalLead && (
         <div className="modal-backdrop" onClick={() => setShowApprovalModal(false)}>
           <div className="modal-content" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
             <form onSubmit={handleConfirmApprovalAndSendToDesign}>
               <div className="modal-header">
-                <h3>✓ {isRtl ? 'موافقة على السعر وإرسال للتصميم' : 'Price Approval & Send to Design'}</h3>
+                <h3>📦 {isRtl ? 'اعتماد أمر الشراء (P.O) وإرسال للمستودع' : 'P.O Approval & Send to Warehouse'}</h3>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowApprovalModal(false)}>✕</button>
               </div>
 
@@ -1024,7 +1281,7 @@ export default function CRMPage() {
                     placeholder={isRtl ? 'مخططات وجدول كميات العميل.pdf' : 'Client schematics & BoQ...'}
                   />
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    {isRtl ? 'سيتم تحويل هذا المشروع فوراً إلى صفحة التصميم (استقبال مشروع جديد) لبدء إعداد P.O المستودع وأمر التصنيع.' : 'This project will be immediately queued in the Design page under incoming projects.'}
+                    {isRtl ? 'سيتم إرسال أمر الشراء (P.O) ومواصفات المشروع فوراً إلى قسم المستودع للتحقق من توفر المواد والقطع المطلوبة.' : 'This project P.O will be dispatched immediately to the Warehouse to verify material availability.'}
                   </div>
                 </div>
               </div>
@@ -1033,8 +1290,8 @@ export default function CRMPage() {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowApprovalModal(false)}>
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700 }}>
-                  🚀 {isRtl ? 'ارسال للتصميم' : 'Send to Design'}
+                <button type="submit" className="btn btn-primary" style={{ background: '#0284c7', borderColor: '#0284c7', fontWeight: 700 }}>
+                  📦 {isRtl ? 'حفظ وإرسال P.O للمستودع' : 'Save & Send P.O to Warehouse'}
                 </button>
               </div>
             </form>

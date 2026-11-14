@@ -8,6 +8,32 @@ import { Profile } from '@/lib/types'
 import { ROLE_LABELS } from '@/lib/constants'
 import { useLanguage } from '@/context/LanguageContext'
 import { useTheme } from '@/context/ThemeContext'
+import { getUserPermissions, getAccessLevel, SectionKey } from '@/lib/permissions'
+import NotificationBell from '@/components/NotificationBell'
+import { getUnreadCountForSection } from '@/lib/notifications'
+
+function mapHrefToSection(href: string): SectionKey | null {
+  const map: Record<string, SectionKey> = {
+    '/dashboard': 'dashboard',
+    '/projects': 'projects',
+    '/external-projects': 'external_projects',
+    '/crm': 'sales',
+    '/engineering': 'engineering',
+    '/tasks': 'tasks_production',
+    '/procurement': 'procurement',
+    '/warehouse': 'warehouse',
+    '/qc': 'qc',
+    '/logistics': 'logistics',
+    '/accounting': 'accounting',
+    '/hr': 'hr',
+    '/dms': 'dms',
+    '/helpdesk': 'helpdesk',
+    '/reports': 'reports',
+    '/config': 'config',
+    '/profile': 'profile',
+  }
+  return map[href] ?? null
+}
 
 const NAV_ITEMS = [
   {
@@ -16,6 +42,7 @@ const NAV_ITEMS = [
     items: [
       { href: '/dashboard', icon: '▦', label: 'Dashboard', labelAr: 'لوحة التحكم' },
       { href: '/projects', icon: '🗂', label: 'Al-Masar Projects', labelAr: 'مشاريع المسار' },
+      { href: '/external-projects', icon: '🌐', label: 'External Projects', labelAr: 'المشاريع الخارجية' },
     ],
   },
   {
@@ -78,6 +105,33 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
   const { theme, toggleTheme, isLight } = useTheme()
   const [profile, setProfile] = useState<any>(null)
   const [authChecked, setAuthChecked] = useState(false)
+  const [unreadMap, setUnreadMap] = useState<Record<string, number>>({})
+
+  const updateUnreadCounts = () => {
+    const map: Record<string, number> = {}
+    NAV_ITEMS.forEach(sec => {
+      sec.items.forEach(item => {
+        const sectionKey = mapHrefToSection(item.href)
+        if (sectionKey) {
+          map[sectionKey] = getUnreadCountForSection(sectionKey)
+        }
+      })
+    })
+    setUnreadMap(map)
+  }
+
+  useEffect(() => {
+    updateUnreadCounts()
+    const handleUpdate = () => updateUnreadCounts()
+    window.addEventListener('almasar_notification', handleUpdate)
+    window.addEventListener('almasar_notification_update', handleUpdate)
+    const interval = setInterval(updateUnreadCounts, 30000)
+    return () => {
+      window.removeEventListener('almasar_notification', handleUpdate)
+      window.removeEventListener('almasar_notification_update', handleUpdate)
+      clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('almasar_user') : null
@@ -87,6 +141,11 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
         if (parsed && parsed.email) {
           setProfile(parsed)
           setAuthChecked(true)
+          // Check if user has a specialPage and redirect there if not already on it
+          const perms = getUserPermissions(parsed)
+          if (perms?.specialPage && window.location.pathname !== perms.specialPage) {
+            router.replace(perms.specialPage)
+          }
           return
         }
       } catch {}
@@ -156,23 +215,61 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(section => (
-            <div key={section.section} className="sidebar-section">
-              <div className="sidebar-section-label">
-                {isRtl ? section.sectionAr : section.section}
+          {NAV_ITEMS.map(section => {
+            // Filter items by permission
+            const visibleItems = section.items.filter(item => {
+              const sectionKey = mapHrefToSection(item.href)
+              if (!sectionKey) return true
+              return getAccessLevel(profile, sectionKey) !== 'hidden'
+            })
+            // Hide the entire section group if all items are hidden
+            if (visibleItems.length === 0) return null
+            return (
+              <div key={section.section} className="sidebar-section">
+                <div className="sidebar-section-label">
+                  {isRtl ? section.sectionAr : section.section}
+                </div>
+                {visibleItems.map(item => {
+                  const sectionKey = mapHrefToSection(item.href)
+                  const unread = sectionKey ? (unreadMap[sectionKey] || 0) : 0
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`sidebar-item ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? 'active' : ''}`}
+                    >
+                      <span style={{ fontSize: 16 }}>{item.icon}</span>
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {isRtl ? item.labelAr : item.label}
+                      </span>
+                      {unread > 0 && (
+                        <span
+                          style={{
+                            background: '#ef4444',
+                            color: '#ffffff',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            minWidth: 18,
+                            height: 18,
+                            borderRadius: 9,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 4px',
+                            lineHeight: 1,
+                            marginInlineStart: 'auto',
+                            flexShrink: 0
+                          }}
+                        >
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
               </div>
-              {section.items.map(item => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`sidebar-item ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? 'active' : ''}`}
-                >
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  <span>{isRtl ? item.labelAr : item.label}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
+            )
+          })}
         </nav>
 
         {/* User Profile Card in Sidebar Footer (Clickable to /profile) */}
@@ -248,7 +345,10 @@ export default function AppLayout({ children, title, titleAr, actions }: Props) 
             <h1 className="topbar-title">{displayTitle}</h1>
           </div>
 
-          <div className="topbar-actions" style={{ position: 'relative' }}>
+          <div className="topbar-actions" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Notification Bell */}
+            <NotificationBell profile={profile} />
+
             {/* Theme Switcher */}
             <button
               className="theme-btn"
