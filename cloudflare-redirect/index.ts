@@ -5,3 +5,4 @@ export default {
     return Response.redirect(targetUrl.toString(), 301);
   },
 };
+

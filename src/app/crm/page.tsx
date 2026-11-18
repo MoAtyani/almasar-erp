@@ -42,15 +42,15 @@ interface ProjectTemplate {
 }
 
 const CATEGORY_MAP: Record<string, { ar: string; en: string; icon: string; color: string }> = {
-  all: { ar: 'الكل', en: 'All Departments', icon: '🏢', color: '#38bdf8' },
-  iron: { ar: 'الحديد', en: 'Iron', icon: '🔩', color: '#f59e0b' },
-  hangar: { ar: 'الهنجر', en: 'Hangar', icon: '🏭', color: '#06b6d4' },
-  electrical: { ar: 'الكهرباء والتجميع', en: 'Electrical & Assembly', icon: '⚡', color: '#8b5cf6' },
-  misc: { ar: 'متفرقات', en: 'Miscellaneous', icon: '📦', color: '#ec4899' },
+  all: { ar: 'الكل', en: 'All Departments', icon: '🏢', color: '#0284c7' },
+  iron: { ar: 'الحديد', en: 'Iron', icon: '🔩', color: '#d97706' },
+  hangar: { ar: 'الهنجر', en: 'Hangar', icon: '🏭', color: '#0891b2' },
+  electrical: { ar: 'الكهرباء والتجميع', en: 'Electrical & Assembly', icon: '⚡', color: '#7c3aed' },
+  misc: { ar: 'متفرقات', en: 'Miscellaneous', icon: '📦', color: '#db2777' },
   // Backward compatibility aliases
-  electrical_panels: { ar: 'الكهرباء والتجميع', en: 'Electrical & Assembly', icon: '⚡', color: '#8b5cf6' },
-  cable_tray_enclosure: { ar: 'الهنجر', en: 'Hangar', icon: '🏭', color: '#06b6d4' },
-  materials_parts: { ar: 'الحديد', en: 'Iron', icon: '🔩', color: '#f59e0b' }
+  electrical_panels: { ar: 'الكهرباء والتجميع', en: 'Electrical & Assembly', icon: '⚡', color: '#7c3aed' },
+  cable_tray_enclosure: { ar: 'الهنجر', en: 'Hangar', icon: '🏭', color: '#0891b2' },
+  materials_parts: { ar: 'الحديد', en: 'Iron', icon: '🔩', color: '#d97706' }
 }
 
 const VISIBLE_CATEGORIES = ['all', 'iron', 'hangar', 'electrical', 'misc']
@@ -742,7 +742,7 @@ export default function CRMPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
+      <div className="kpi-grid" style={{ marginBottom: 20 }}>
         <div className="kpi-card accent">
           <div className="kpi-icon accent-bg">📋</div>
           <div className="kpi-value">{leads.length}</div>
@@ -769,11 +769,44 @@ export default function CRMPage() {
       {activeTab === 'sales_orders' && (
         <div className="card" style={{ padding: '20px 24px' }}>
           {/* Section 2: Department Category Filter (صفحة البيع / العميل / الشركة / القسم) */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>
-              {isRtl ? 'تصنيف القسم / خط الإنتاج (العميل / الشركة / القسم):' : 'Department & Product Line Category:'}
+          <div className="crm-category-filter-box">
+            <div className="crm-category-filter-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>🏷️</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {isRtl ? 'تصنيف القسم / خط الإنتاج' : 'Department & Product Line Category'}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
+                  {isRtl ? '(العميل / الشركة / القسم)' : '(Customer / Company / Dept)'}
+                </span>
+              </div>
+              {selectedCategory !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('all')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 6,
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title={isRtl ? 'إعادة ضبط تصفية الأقسام' : 'Reset category filter'}
+                >
+                  <span>✕</span>
+                  <span>{isRtl ? 'إعادة تعيين الكل' : 'Reset Filter'}</span>
+                </button>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+            <div className="crm-category-grid">
               {VISIBLE_CATEGORIES.map(key => {
                 const info = CATEGORY_MAP[key]
                 if (!info) return null
@@ -789,25 +822,29 @@ export default function CRMPage() {
                 return (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => setSelectedCategory(key)}
+                    className={`crm-category-btn ${isSelected ? 'is-active' : ''}`}
                     style={{
-                      padding: '8px 16px',
-                      borderRadius: 8,
-                      border: isSelected ? `2px solid ${info.color}` : '1px solid var(--border)',
-                      background: isSelected ? `${info.color}22` : 'var(--bg-base)',
-                      color: isSelected ? '#fff' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      transition: 'all 0.15s ease'
+                      borderColor: isSelected ? info.color : undefined,
+                      backgroundColor: isSelected ? `${info.color}15` : undefined,
+                      color: isSelected ? info.color : undefined,
+                      boxShadow: isSelected ? `0 4px 14px ${info.color}25` : undefined,
                     }}
+                    title={info[lang] || info.en}
                   >
-                    <span>{info.icon}</span>
-                    <span>{info[lang] || info.en}</span>
-                    <span style={{ fontSize: 11, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: '2px 6px', borderRadius: 10 }}>
+                    <div className="crm-category-btn-start">
+                      <span className="crm-category-btn-icon">{info.icon}</span>
+                      <span className="crm-category-btn-label">{info[lang] || info.en}</span>
+                    </div>
+                    <span
+                      className="crm-category-btn-badge"
+                      style={{
+                        backgroundColor: isSelected ? info.color : undefined,
+                        color: isSelected ? '#ffffff' : undefined,
+                        borderColor: isSelected ? info.color : undefined,
+                      }}
+                    >
                       {count}
                     </span>
                   </button>
@@ -816,12 +853,14 @@ export default function CRMPage() {
             </div>
           </div>
 
-          {/* Status Filter Tabs (قيد التصنيع / جاهز للتسليم / تم التسليم) */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {/* Status Filter Tabs & Search Bar (قيد التصنيع / جاهز للتسليم / تم التسليم) */}
+          <div className="crm-filter-toolbar">
+            <div className="crm-filter-status-group">
               <button
+                type="button"
                 onClick={() => setSelectedStatus('all')}
                 className={`btn btn-sm ${selectedStatus === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontWeight: 600, borderRadius: 8, padding: '7px 14px' }}
               >
                 {isRtl ? 'جميع الحالات' : 'All Statuses'} ({leads.length})
               </button>
@@ -831,16 +870,18 @@ export default function CRMPage() {
                 return (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => setSelectedStatus(key)}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: 6,
+                      padding: '7px 12px',
+                      borderRadius: 8,
                       fontSize: 12,
                       fontWeight: 600,
                       cursor: 'pointer',
                       border: isSelected ? `2px solid ${info.color}` : '1px solid var(--border)',
-                      background: isSelected ? info.bg : 'transparent',
-                      color: isSelected ? info.color : 'var(--text-secondary)'
+                      background: isSelected ? info.bg : 'var(--bg-base)',
+                      color: isSelected ? info.color : 'var(--text-secondary)',
+                      transition: 'all 0.15s ease'
                     }}
                   >
                     {info[lang] || info.en} ({count})
@@ -849,18 +890,61 @@ export default function CRMPage() {
               })}
             </div>
 
-            <input
-              type="text"
-              className="input"
-              style={{ width: 260 }}
-              placeholder={isRtl ? '...بحث بالرقم المرجعي أو اسم المشروع أو العميل' : 'Search reference, project, client...'}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <div className="crm-filter-search-wrap">
+              <div style={{ position: 'relative', width: '100%' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    [isRtl ? 'right' : 'left']: 10,
+                    color: 'var(--text-muted)',
+                    fontSize: 13,
+                    pointerEvents: 'none'
+                  }}
+                >
+                  🔍
+                </span>
+                <input
+                  type="text"
+                  className="input"
+                  style={{
+                    width: '100%',
+                    paddingInlineStart: 32,
+                    borderRadius: 8,
+                    fontSize: 13,
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder={isRtl ? 'بحث بالرقم المرجعي أو اسم المشروع أو العميل...' : 'Search reference, project, client...'}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      [isRtl ? 'left' : 'right']: 10,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      fontSize: 12
+                    }}
+                    title={isRtl ? 'مسح البحث' : 'Clear search'}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* TABLE: Section 1 */}
-          <div className="table-container">
+          <div className="table-wrapper" style={{ overflowX: 'auto', width: '100%' }}>
             <table className="table">
               <thead>
                 <tr>

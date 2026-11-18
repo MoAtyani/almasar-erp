@@ -1405,4 +1405,161 @@ textarea.form-control, textarea.input { resize: vertical; min-height: 100px; }
   }
 }
 
+/* ============================================================
+   CRM DEPARTMENT CATEGORY FILTER (RESPONSIVE)
+   ============================================================ */
+.crm-category-filter-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.crm-category-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crm-category-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .crm-category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .crm-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .crm-category-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crm-category-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 48px;
+  box-sizing: border-box;
+  width: 100%;
+  text-align: inherit;
+  user-select: none;
+}
+
+.crm-category-btn:hover {
+  background: var(--bg-elevated);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.crm-category-btn.is-active {
+  font-weight: 700;
+}
+
+.crm-category-btn.is-active:hover {
+  transform: translateY(-2px);
+}
+
+.crm-category-btn-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.crm-category-btn-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.crm-category-btn-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.crm-category-btn-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  margin-inline-start: 6px;
+  line-height: 1.4;
+  transition: all 0.15s ease;
+}
+
+/* CRM Status Filter Tabs & Search Bar (Responsive) */
+.crm-filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.crm-filter-status-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1 1 auto;
+}
+
+.crm-filter-search-wrap {
+  flex: 0 1 280px;
+  min-width: 220px;
+}
+
+@media (max-width: 860px) {
+  .crm-filter-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .crm-filter-status-group {
+    width: 100%;
+  }
+  .crm-filter-search-wrap {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
 
